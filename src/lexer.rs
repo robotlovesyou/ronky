@@ -2,7 +2,7 @@
 use crate::source::{SourceChar, SourceChars, ToSource};
 use crate::token::{self, TokenKind, Token};
 use std::iter::Peekable;
-use crate::token::TokenKind::ILLEGAL;
+use crate::token::TokenKind::Illegal;
 
 pub struct Lexer {
     source: Peekable<SourceChars>,
@@ -56,7 +56,7 @@ impl Lexer {
                 _ => break
             }
         }
-        new_token(first, TokenKind::INT(number))
+        new_token(first, TokenKind::Int(number))
     }
 }
 
@@ -89,27 +89,27 @@ impl Iterator for Lexer {
                 ' ' | '\t' => None,
                 '=' => self.if_peek_else('=',
                                       || new_token(&sc, TokenKind::EQ),
-                                      || new_token(&sc, TokenKind::ASSIGN)
+                                      || new_token(&sc, TokenKind::Assign)
                     ),
-                '+' => new_token(&sc, TokenKind::PLUS),
-                '-' => new_token(&sc, TokenKind::MINUS),
+                '+' => new_token(&sc, TokenKind::Plus),
+                '-' => new_token(&sc, TokenKind::Minus),
                 '!' => self.if_peek_else('=',
-                        || new_token(&sc, TokenKind::NOT_EQ),
-                            || new_token(&sc, TokenKind::BANG)
+                                         || new_token(&sc, TokenKind::NotEQ),
+                                         || new_token(&sc, TokenKind::Bang)
                         ),
-                '/' => new_token(&sc, TokenKind::SLASH),
-                '*' => new_token(&sc, TokenKind::ASTERISK),
+                '/' => new_token(&sc, TokenKind::Slash),
+                '*' => new_token(&sc, TokenKind::Asterisk),
                 '<' => new_token(&sc, TokenKind::LT),
                 '>' => new_token(&sc, TokenKind::GT),
-                ';' => new_token(&sc, TokenKind::SEMICOLON),
-                ',' => new_token(&sc, TokenKind::COMMA),
-                '{' => new_token(&sc, TokenKind::LBRACE),
-                '}' => new_token(&sc, TokenKind::RBRACE),
-                '(' => new_token(&sc, TokenKind::LPAREN),
-                ')' => new_token(&sc, TokenKind::RPAREN),
+                ';' => new_token(&sc, TokenKind::Semicolon),
+                ',' => new_token(&sc, TokenKind::Comma),
+                '{' => new_token(&sc, TokenKind::LBrace),
+                '}' => new_token(&sc, TokenKind::RBrace),
+                '(' => new_token(&sc, TokenKind::LParen),
+                ')' => new_token(&sc, TokenKind::RParen),
                 c if is_letter(c) => self.read_identifier(&sc),
                 c if is_digit(c) => self.read_number(&sc),
-                illegal => new_token(&sc, ILLEGAL(illegal)),
+                illegal => new_token(&sc, Illegal(illegal)),
             };
             if next.is_some() {
                 return next;
@@ -162,16 +162,16 @@ mod tests {
 
     fn expected_tokens() -> Vec<Token> {
         vec![
-            Token::new(1, 1, TokenKind::LET),
-            Token::new(1, 5, TokenKind::IDENT("five".to_string())),
-            Token::new(1, 10, TokenKind::ASSIGN),
-            Token::new(1, 12, TokenKind::INT("5".to_string())),
-            Token::new(1, 13, TokenKind::SEMICOLON),
-            Token::new(2, 1, TokenKind::LET),
-            Token::new(2, 5, TokenKind::IDENT("ten".to_string())),
-            Token::new(2, 9, TokenKind::ASSIGN),
-            Token::new(2, 11, TokenKind::INT("10".to_string())),
-            Token::new(2, 13, TokenKind::SEMICOLON),
+            Token::new(1, 1, TokenKind::Let),
+            Token::new(1, 5, TokenKind::Ident("five".to_string())),
+            Token::new(1, 10, TokenKind::Assign),
+            Token::new(1, 12, TokenKind::Int("5".to_string())),
+            Token::new(1, 13, TokenKind::Semicolon),
+            Token::new(2, 1, TokenKind::Let),
+            Token::new(2, 5, TokenKind::Ident("ten".to_string())),
+            Token::new(2, 9, TokenKind::Assign),
+            Token::new(2, 11, TokenKind::Int("10".to_string())),
+            Token::new(2, 13, TokenKind::Semicolon),
         ]
     }
 

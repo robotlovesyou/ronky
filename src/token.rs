@@ -1,39 +1,39 @@
 #[derive(Eq, PartialEq, Debug)]
 pub enum TokenKind {
-    ILLEGAL(char),
+    Illegal(char),
     EOF,
 
-    IDENT(String),
-    INT(String),
+    Ident(String),
+    Int(String),
 
-    ASSIGN,
-    PLUS,
-    MINUS,
-    BANG,
-    ASTERISK,
-    SLASH,
+    Assign,
+    Plus,
+    Minus,
+    Bang,
+    Asterisk,
+    Slash,
 
     LT,
     GT,
 
     EQ,
-    NOT_EQ,
+    NotEQ,
 
-    COMMA,
-    SEMICOLON,
+    Comma,
+    Semicolon,
 
-    LPAREN,
-    RPAREN,
-    LBRACE,
-    RBRACE,
+    LParen,
+    RParen,
+    LBrace,
+    RBrace,
 
-    FUNCTION,
-    LET,
-    TRUE,
-    FALSE,
-    IF,
-    ELSE,
-    RETURN
+    Function,
+    Let,
+    True,
+    False,
+    If,
+    Else,
+    Return
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -56,13 +56,13 @@ impl Token {
 
 pub fn keyword_to_token(keyword: &str) -> TokenKind {
     match keyword {
-        "fn" => TokenKind::FUNCTION,
-        "let" => TokenKind::LET,
-        "true" => TokenKind::TRUE,
-        "false" => TokenKind::FALSE,
-        "if" => TokenKind::IF,
-        "else" => TokenKind::ELSE,
-        "return" => TokenKind::RETURN,
-        ident => TokenKind::IDENT(ident.to_string())
+        "fn" => TokenKind::Function,
+        "let" => TokenKind::Let,
+        "true" => TokenKind::True,
+        "false" => TokenKind::False,
+        "if" => TokenKind::If,
+        "else" => TokenKind::Else,
+        "return" => TokenKind::Return,
+        ident => TokenKind::Ident(ident.to_string())
     }
 }
