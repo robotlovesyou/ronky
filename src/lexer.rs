@@ -1,8 +1,8 @@
 #[cfg(test)]
 use crate::source::{SourceChar, SourceChars, ToSource};
-use crate::token::{self, TokenKind, Token};
+use crate::token::{self, Kind, Token};
 use std::iter::Peekable;
-use crate::token::TokenKind::Illegal;
+use crate::token::Kind::Illegal;
 
 pub struct Lexer {
     source: Peekable<SourceChars>,
@@ -41,7 +41,7 @@ impl Lexer {
                 _ => break,
             }
         }
-        new_token(first, token::keyword_to_token(&ident))
+        new_token(first, token::keyword_to_kind(&ident))
     }
 
     fn read_number(&mut self, first: &SourceChar) -> Option<Token> {
@@ -56,11 +56,11 @@ impl Lexer {
                 _ => break
             }
         }
-        new_token(first, TokenKind::Int(number))
+        new_token(first, Kind::Int(number))
     }
 }
 
-fn new_token(sc: &SourceChar, kind: TokenKind) -> Option<Token> {
+fn new_token(sc: &SourceChar, kind: Kind) -> Option<Token> {
     Some(Token::new(sc.line, sc.column, kind))
 }
 
@@ -88,25 +88,25 @@ impl Iterator for Lexer {
             let next = match sc.repr {
                 ' ' | '\t' => None,
                 '=' => self.if_peek_else('=',
-                                      || new_token(&sc, TokenKind::EQ),
-                                      || new_token(&sc, TokenKind::Assign)
+                                         || new_token(&sc, Kind::EQ),
+                                         || new_token(&sc, Kind::Assign)
                     ),
-                '+' => new_token(&sc, TokenKind::Plus),
-                '-' => new_token(&sc, TokenKind::Minus),
+                '+' => new_token(&sc, Kind::Plus),
+                '-' => new_token(&sc, Kind::Minus),
                 '!' => self.if_peek_else('=',
-                                         || new_token(&sc, TokenKind::NotEQ),
-                                         || new_token(&sc, TokenKind::Bang)
+                                         || new_token(&sc, Kind::NotEQ),
+                                         || new_token(&sc, Kind::Bang)
                         ),
-                '/' => new_token(&sc, TokenKind::Slash),
-                '*' => new_token(&sc, TokenKind::Asterisk),
-                '<' => new_token(&sc, TokenKind::LT),
-                '>' => new_token(&sc, TokenKind::GT),
-                ';' => new_token(&sc, TokenKind::Semicolon),
-                ',' => new_token(&sc, TokenKind::Comma),
-                '{' => new_token(&sc, TokenKind::LBrace),
-                '}' => new_token(&sc, TokenKind::RBrace),
-                '(' => new_token(&sc, TokenKind::LParen),
-                ')' => new_token(&sc, TokenKind::RParen),
+                '/' => new_token(&sc, Kind::Slash),
+                '*' => new_token(&sc, Kind::Asterisk),
+                '<' => new_token(&sc, Kind::LT),
+                '>' => new_token(&sc, Kind::GT),
+                ';' => new_token(&sc, Kind::Semicolon),
+                ',' => new_token(&sc, Kind::Comma),
+                '{' => new_token(&sc, Kind::LBrace),
+                '}' => new_token(&sc, Kind::RBrace),
+                '(' => new_token(&sc, Kind::LParen),
+                ')' => new_token(&sc, Kind::RParen),
                 c if is_letter(c) => self.read_identifier(&sc),
                 c if is_digit(c) => self.read_number(&sc),
                 illegal => new_token(&sc, Illegal(illegal)),
@@ -132,7 +132,7 @@ impl IntoTokens for SourceChars {
 mod tests {
     use super::*;
 
-    use crate::token::{Token, TokenKind};
+    use crate::token::{Token, Kind};
     use crate::source::{self, SourceChar, SourceChars, ToSource};
 
     use indoc::indoc;
@@ -151,9 +151,9 @@ mod tests {
     5 < 10 > 5;
 
     if (5 < 10) {
-	    return true;
+        return true;
     } else {
-	    return false;
+        return false;
     }
 
     10 == 10;
@@ -162,93 +162,82 @@ mod tests {
 
     fn expected_tokens() -> Vec<Token> {
         vec![
-            Token::new(1, 1, TokenKind::Let),
-            Token::new(1, 5, TokenKind::Ident("five".to_string())),
-            Token::new(1, 10, TokenKind::Assign),
-            Token::new(1, 12, TokenKind::Int("5".to_string())),
-            Token::new(1, 13, TokenKind::Semicolon),
-            Token::new(2, 1, TokenKind::Let),
-            Token::new(2, 5, TokenKind::Ident("ten".to_string())),
-            Token::new(2, 9, TokenKind::Assign),
-            Token::new(2, 11, TokenKind::Int("10".to_string())),
-            Token::new(2, 13, TokenKind::Semicolon),
+            Token::new(1, 1, Kind::Let),
+            Token::new(1, 5, Kind::Ident("five".to_string())),
+            Token::new(1, 10, Kind::Assign),
+            Token::new(1, 12, Kind::Int("5".to_string())),
+            Token::new(1, 13, Kind::Semicolon),
+            Token::new(2, 1, Kind::Let),
+            Token::new(2, 5, Kind::Ident("ten".to_string())),
+            Token::new(2, 9, Kind::Assign),
+            Token::new(2, 11, Kind::Int("10".to_string())),
+            Token::new(2, 13, Kind::Semicolon),
+            Token::new(4, 1, Kind::Let),
+            Token::new(4, 5, Kind::Ident("add".to_string())),
+            Token::new(4, 9, Kind::Assign),
+            Token::new(4, 11, Kind::Function),
+            Token::new(4, 13, Kind::LParen),
+            Token::new(4, 14, Kind::Ident("x".to_string())),
+            Token::new(4, 15, Kind::Comma),
+            Token::new(4, 17, Kind::Ident("y".to_string())),
+            Token::new(4, 18, Kind::RParen),
+            Token::new(4, 20, Kind::LBrace),
+            Token::new(5, 5, Kind::Ident("x".to_string())),
+            Token::new(5, 7, Kind::Plus),
+            Token::new(5, 9, Kind::Ident("y".to_string())),
+            Token::new(5, 10, Kind::Semicolon),
+            Token::new(6, 1, Kind::RBrace),
+            Token::new(6, 2, Kind::Semicolon),
+            Token::new(8, 1, Kind::Let),
+            Token::new(8, 5, Kind::Ident("result".to_string())),
+            Token::new(8, 12, Kind::Assign),
+            Token::new(8, 14, Kind::Ident("add".to_string())),
+            Token::new(8, 17, Kind::LParen),
+            Token::new(8, 18, Kind::Ident("five".to_string())),
+            Token::new(8, 22, Kind::Comma),
+            Token::new(8, 24, Kind::Ident("ten".to_string())),
+            Token::new(8, 27, Kind::RParen),
+            Token::new(8, 28, Kind::Semicolon),
+            Token::new(9, 1, Kind::Bang),
+            Token::new(9, 2, Kind::Minus),
+            Token::new(9, 3, Kind::Slash),
+            Token::new(9, 4, Kind::Asterisk),
+            Token::new(9, 5, Kind::Int("5".to_string())),
+            Token::new(9, 6, Kind::Semicolon),
+            Token::new(10, 1, Kind::Int("5".to_string())),
+            Token::new(10, 3, Kind::LT),
+            Token::new(10, 5, Kind::Int("10".to_string())),
+            Token::new(10, 8, Kind::GT),
+            Token::new(10, 10, Kind::Int("5".to_string())),
+            Token::new(10, 11, Kind::Semicolon),
+            Token::new(12, 1, Kind::If),
+            Token::new(12, 4, Kind::LParen),
+            Token::new(12, 5, Kind::Int("5".to_string())),
+            Token::new(12, 7, Kind::LT),
+            Token::new(12, 9, Kind::Int("10".to_string())),
+            Token::new(12, 11, Kind::RParen),
+            Token::new(12, 13, Kind::LBrace),
+            Token::new(13, 5, Kind::Return),
+            Token::new(13, 12, Kind::True),
+            Token::new(13, 16, Kind::Semicolon),
+            Token::new(14, 1, Kind::RBrace),
+            Token::new(14, 3, Kind::Else),
+            Token::new(14, 8, Kind::LBrace),
+            Token::new(15, 5, Kind::Return),
+            Token::new(15, 12, Kind::False),
+            Token::new(15, 17, Kind::Semicolon),
+            Token::new(16, 1, Kind::RBrace),
+            Token::new(18, 1, Kind::Int("10".to_string())),
+            Token::new(18, 4, Kind::EQ),
+            Token::new(18, 7, Kind::Int("10".to_string())),
+            Token::new(18, 9, Kind::Semicolon),
+            Token::new(19, 1, Kind::Int("10".to_string())),
+            Token::new(19, 4, Kind::NotEQ),
+            Token::new(19, 7, Kind::Int("9".to_string())),
+            Token::new(19, 8, Kind::Semicolon),
+
         ]
     }
-
-    // {token.LET, "let"},
-    // {token.IDENT, "five"},
-    // {token.ASSIGN, "="},
-    // {token.INT, "5"},
-    // {token.SEMICOLON, ";"},
-    // {token.LET, "let"},
-    // {token.IDENT, "ten"},
-    // {token.ASSIGN, "="},
-    // {token.INT, "10"},
-    // {token.SEMICOLON, ";"},
-    // {token.LET, "let"},
-    // {token.IDENT, "add"},
-    // {token.ASSIGN, "="},
-    // {token.FUNCTION, "fn"},
-    // {token.LPAREN, "("},
-    // {token.IDENT, "x"},
-    // {token.COMMA, ","},
-    // {token.IDENT, "y"},
-    // {token.RPAREN, ")"},
-    // {token.LBRACE, "{"},
-    // {token.IDENT, "x"},
-    // {token.PLUS, "+"},
-    // {token.IDENT, "y"},
-    // {token.SEMICOLON, ";"},
-    // {token.RBRACE, "}"},
-    // {token.SEMICOLON, ";"},
-    // {token.LET, "let"},
-    // {token.IDENT, "result"},
-    // {token.ASSIGN, "="},
-    // {token.IDENT, "add"},
-    // {token.LPAREN, "("},
-    // {token.IDENT, "five"},
-    // {token.COMMA, ","},
-    // {token.IDENT, "ten"},
-    // {token.RPAREN, ")"},
-    // {token.SEMICOLON, ";"},
-    // {token.BANG, "!"},
-    // {token.MINUS, "-"},
-    // {token.SLASH, "/"},
-    // {token.ASTERISK, "*"},
-    // {token.INT, "5"},
-    // {token.SEMICOLON, ";"},
-    // {token.INT, "5"},
-    // {token.LT, "<"},
-    // {token.INT, "10"},
-    // {token.GT, ">"},
-    // {token.INT, "5"},
-    // {token.SEMICOLON, ";"},
-    // {token.IF, "if"},
-    // {token.LPAREN, "("},
-    // {token.INT, "5"},
-    // {token.LT, "<"},
-    // {token.INT, "10"},
-    // {token.RPAREN, ")"},
-    // {token.LBRACE, "{"},
-    // {token.RETURN, "return"},
-    // {token.TRUE, "true"},
-    // {token.SEMICOLON, ";"},
-    // {token.RBRACE, "}"},
-    // {token.ELSE, "else"},
-    // {token.LBRACE, "{"},
-    // {token.RETURN, "return"},
-    // {token.FALSE, "false"},
-    // {token.SEMICOLON, ";"},
-    // {token.RBRACE, "}"},
-    // {token.INT, "10"},
-    // {token.EQ, "=="},
-    // {token.INT, "10"},
-    // {token.SEMICOLON, ";"},
-    // {token.INT, "10"},
-    // {token.NOT_EQ, "!="},
-    // {token.INT, "9"},
-    // {token.SEMICOLON, ";"},
-    // {token.EOF, ""},
 
     #[test]
     fn produces_the_expected_tokens() {
@@ -256,6 +245,5 @@ mod tests {
         for token in expected_tokens().into_iter() {
             assert_eq!(token, lexer.next().expect("no token in source"));
         }
-        panic!("you still need to add all the other tokens!");
     }
 }

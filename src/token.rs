@@ -1,5 +1,5 @@
 #[derive(Eq, PartialEq, Debug)]
-pub enum TokenKind {
+pub enum Kind {
     Illegal(char),
     EOF,
 
@@ -40,12 +40,12 @@ pub enum TokenKind {
 pub struct Token {
     pub line: usize,
     pub column: usize,
-    pub kind: TokenKind,
+    pub kind: Kind,
 }
 
 
 impl Token {
-    pub fn new(line: usize, column: usize, kind: TokenKind) -> Token {
+    pub fn new(line: usize, column: usize, kind: Kind) -> Token {
         Token {
             line,
             column,
@@ -54,15 +54,15 @@ impl Token {
     }
 }
 
-pub fn keyword_to_token(keyword: &str) -> TokenKind {
+pub fn keyword_to_kind(keyword: &str) -> Kind {
     match keyword {
-        "fn" => TokenKind::Function,
-        "let" => TokenKind::Let,
-        "true" => TokenKind::True,
-        "false" => TokenKind::False,
-        "if" => TokenKind::If,
-        "else" => TokenKind::Else,
-        "return" => TokenKind::Return,
-        ident => TokenKind::Ident(ident.to_string())
+        "fn" => Kind::Function,
+        "let" => Kind::Let,
+        "true" => Kind::True,
+        "false" => Kind::False,
+        "if" => Kind::If,
+        "else" => Kind::Else,
+        "return" => Kind::Return,
+        ident => Kind::Ident(ident.to_string())
     }
 }
