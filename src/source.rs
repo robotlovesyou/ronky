@@ -1,6 +1,3 @@
-use std::{path, fs, io};
-use std::io::BufRead;
-
 #[derive(Copy, Clone)]
 pub struct SourceChar {
     pub repr: char,

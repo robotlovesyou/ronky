@@ -1,5 +1,4 @@
-#[cfg(test)]
-use crate::source::{SourceChar, SourceChars, ToSource};
+use crate::source::{SourceChar, SourceChars};
 use crate::token::{self, Kind, Token};
 use std::iter::Peekable;
 use crate::token::Kind::Illegal;
@@ -36,7 +35,6 @@ impl Lexer {
                 c if is_letter(c) => {
                     ident.push(c);
                     self.source.next();
-                    ()
                 },
                 _ => break,
             }
@@ -51,7 +49,6 @@ impl Lexer {
                 c if is_digit(c) => {
                     number.push(c);
                     self.source.next();
-                    ()
                 },
                 _ => break
             }
@@ -65,17 +62,11 @@ fn new_token(sc: &SourceChar, kind: Kind) -> Option<Token> {
 }
 
 fn is_letter(c: char) -> bool {
-    match c {
-        'a'..='z' | 'A'..='Z' | '_' => true,
-        _ => false
-    }
+    matches!(c, 'a'..='z' | 'A'..='Z' | '_')
 }
 
 fn is_digit(c: char) -> bool {
-    match c {
-        '0'..='9' => true,
-        _ => false
-    }
+    matches!(c, '0'..='9')
 }
 
 
@@ -129,14 +120,14 @@ impl IntoTokens for SourceChars {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
 
     use crate::token::{Token, Kind};
-    use crate::source::{self, SourceChar, SourceChars, ToSource};
+    use crate::source::{ToSource};
 
     use indoc::indoc;
-    use lazy_static::lazy_static;
 
     const INPUT: &'static str = indoc!{"\
     let five = 5;

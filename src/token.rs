@@ -1,7 +1,6 @@
 #[derive(Eq, PartialEq, Debug)]
 pub enum Kind {
     Illegal(char),
-    EOF,
 
     Ident(String),
     Int(String),
