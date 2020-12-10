@@ -1,25 +1,24 @@
-use std::{io, error};
 use std::io::Write;
+use std::{error, io};
 
-use crate::source::{ToSource};
-use crate::lexer::{IntoTokens};
+use crate::lexer::IntoTokens;
+use crate::source::ToSource;
 use core::result;
 
-
-const PROMPT: &str  = ">> ";
+const PROMPT: &str = ">> ";
 
 pub fn start(stdin: io::Stdin, stdout: &mut io::Stdout) {
     let mut line = String::new();
     loop {
         write(stdout, PROMPT);
-        match read(&stdin, &mut line){
+        match read(&stdin, &mut line) {
             Ok(_) => {
                 let tokens = line.as_str().to_source().into_tokens();
                 for token in tokens {
                     write(stdout, format!("{:?}\n", token).as_str());
                 }
                 line.clear();
-            },
+            }
             Err(e) => {
                 write(stdout, format!("{:?}", e).as_str());
                 return;

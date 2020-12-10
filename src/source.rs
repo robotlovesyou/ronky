@@ -7,7 +7,7 @@ pub struct SourceChar {
 
 impl SourceChar {
     pub fn new(line: usize, column: usize, repr: char) -> SourceChar {
-        SourceChar{line, column, repr}
+        SourceChar { line, column, repr }
     }
 }
 
@@ -37,7 +37,7 @@ impl Iterator for SourceChars {
                     self.next_line += 1;
                     self.next_column = 1;
                     None
-                },
+                }
                 repr => {
                     let sc = Some(SourceChar::new(self.next_line, self.next_column, repr));
                     self.next_column += 1;
@@ -68,16 +68,44 @@ mod tests {
 
     use indoc::indoc;
 
-    const TEST_SOURCE: &'static str = indoc!{"\
+    const TEST_SOURCE: &'static str = indoc! {"\
     ab
     cd"};
 
     #[test]
     fn produces_expected_characters() {
         let mut iter = TEST_SOURCE.to_source();
-        assert!(matches!(iter.next(), Some(SourceChar{line: 1, column: 1, repr: 'a'})));
-        assert!(matches!(iter.next(), Some(SourceChar{line: 1, column: 2, repr: 'b'})));
-        assert!(matches!(iter.next(), Some(SourceChar{line: 2, column: 1, repr: 'c'})));
-        assert!(matches!(iter.next(), Some(SourceChar{line: 2, column: 2, repr: 'd'})));
+        assert!(matches!(
+            iter.next(),
+            Some(SourceChar {
+                line: 1,
+                column: 1,
+                repr: 'a'
+            })
+        ));
+        assert!(matches!(
+            iter.next(),
+            Some(SourceChar {
+                line: 1,
+                column: 2,
+                repr: 'b'
+            })
+        ));
+        assert!(matches!(
+            iter.next(),
+            Some(SourceChar {
+                line: 2,
+                column: 1,
+                repr: 'c'
+            })
+        ));
+        assert!(matches!(
+            iter.next(),
+            Some(SourceChar {
+                line: 2,
+                column: 2,
+                repr: 'd'
+            })
+        ));
     }
 }

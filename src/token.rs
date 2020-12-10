@@ -32,7 +32,7 @@ pub enum Kind {
     False,
     If,
     Else,
-    Return
+    Return,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -42,14 +42,9 @@ pub struct Token {
     pub kind: Kind,
 }
 
-
 impl Token {
     pub fn new(line: usize, column: usize, kind: Kind) -> Token {
-        Token {
-            line,
-            column,
-            kind,
-        }
+        Token { line, column, kind }
     }
 }
 
@@ -62,6 +57,6 @@ pub fn keyword_to_kind(keyword: &str) -> Kind {
         "if" => Kind::If,
         "else" => Kind::Else,
         "return" => Kind::Return,
-        ident => Kind::Ident(ident.to_string())
+        ident => Kind::Ident(ident.to_string()),
     }
 }

@@ -1,6 +1,6 @@
-mod source;
 mod lexer;
 mod repl;
+mod source;
 mod token;
 
 use std::io;

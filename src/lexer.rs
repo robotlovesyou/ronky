@@ -1,7 +1,7 @@
 use crate::source::{SourceChar, SourceChars};
+use crate::token::Kind::Illegal;
 use crate::token::{self, Kind, Token};
 use std::iter::Peekable;
-use crate::token::Kind::Illegal;
 
 pub struct Lexer {
     source: Peekable<SourceChars>,
@@ -9,16 +9,19 @@ pub struct Lexer {
 
 impl Lexer {
     pub fn new(source: SourceChars) -> Lexer {
-        Lexer{source: source.peekable()}
+        Lexer {
+            source: source.peekable(),
+        }
     }
 
     fn peek_check(&mut self, c: char) -> bool {
         self.source.peek().map_or(false, |pc| pc.repr == c)
     }
 
-    fn if_peek_else<T, F>(&mut self, c: char, if_true: T, if_false: F) -> Option<Token> where
-    T: Fn() -> Option<Token>,
-    F: Fn() -> Option<Token>
+    fn if_peek_else<T, F>(&mut self, c: char, if_true: T, if_false: F) -> Option<Token>
+    where
+        T: Fn() -> Option<Token>,
+        F: Fn() -> Option<Token>,
     {
         if self.peek_check(c) {
             self.source.next();
@@ -35,7 +38,7 @@ impl Lexer {
                 c if is_letter(c) => {
                     ident.push(c);
                     self.source.next();
-                },
+                }
                 _ => break,
             }
         }
@@ -49,8 +52,8 @@ impl Lexer {
                 c if is_digit(c) => {
                     number.push(c);
                     self.source.next();
-                },
-                _ => break
+                }
+                _ => break,
             }
         }
         new_token(first, Kind::Int(number))
@@ -69,8 +72,6 @@ fn is_digit(c: char) -> bool {
     matches!(c, '0'..='9')
 }
 
-
-
 impl Iterator for Lexer {
     type Item = Token;
 
@@ -78,16 +79,18 @@ impl Iterator for Lexer {
         while let Some(sc) = self.source.next() {
             let next = match sc.repr {
                 ' ' | '\t' => None,
-                '=' => self.if_peek_else('=',
-                                         || new_token(&sc, Kind::EQ),
-                                         || new_token(&sc, Kind::Assign)
-                    ),
+                '=' => self.if_peek_else(
+                    '=',
+                    || new_token(&sc, Kind::EQ),
+                    || new_token(&sc, Kind::Assign),
+                ),
                 '+' => new_token(&sc, Kind::Plus),
                 '-' => new_token(&sc, Kind::Minus),
-                '!' => self.if_peek_else('=',
-                                         || new_token(&sc, Kind::NotEQ),
-                                         || new_token(&sc, Kind::Bang)
-                        ),
+                '!' => self.if_peek_else(
+                    '=',
+                    || new_token(&sc, Kind::NotEQ),
+                    || new_token(&sc, Kind::Bang),
+                ),
                 '/' => new_token(&sc, Kind::Slash),
                 '*' => new_token(&sc, Kind::Asterisk),
                 '<' => new_token(&sc, Kind::LT),
@@ -124,12 +127,12 @@ impl IntoTokens for SourceChars {
 mod tests {
     use super::*;
 
-    use crate::token::{Token, Kind};
-    use crate::source::{ToSource};
+    use crate::source::ToSource;
+    use crate::token::{Kind, Token};
 
     use indoc::indoc;
 
-    const INPUT: &'static str = indoc!{"\
+    const INPUT: &'static str = indoc! {"\
     let five = 5;
     let ten = 10;
 
@@ -226,7 +229,6 @@ mod tests {
             Token::new(19, 4, Kind::NotEQ),
             Token::new(19, 7, Kind::Int("9".to_string())),
             Token::new(19, 8, Kind::Semicolon),
-
         ]
     }
 
