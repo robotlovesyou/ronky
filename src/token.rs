@@ -48,6 +48,12 @@ impl Token {
     }
 }
 
+impl std::string::ToString for Token {
+    fn to_string(&self) -> String {
+        format!("{:?}", self)
+    }
+}
+
 pub fn keyword_to_kind(keyword: &str) -> Kind {
     match keyword {
         "fn" => Kind::Function,
