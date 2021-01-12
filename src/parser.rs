@@ -5,6 +5,7 @@ use crate::token::*;
 use std::iter::Peekable;
 
 const PARSING_A_LET_STATEMENT: &'static str = "parsing a let statement";
+const PARSING_A_PROGRAM: &'static str = "parsing a program";
 
 #[derive(Debug)]
 pub struct ParseError {
@@ -30,7 +31,14 @@ impl StatementError {
     fn unexpected_token(expected: &str, got: &Token, action: &str) -> Error {
         Error{
             kind: ErrorKind::Statement(StatementError {
-                message: format!("got {:?} instead of an {} while {}", got, expected, action)
+                message: format!(
+                    "got an {} instead of an {} while {} at line {} column {}",
+                    got.kind.tag(),
+                    expected,
+                    action,
+                    got.line,
+                    got.column,
+                )
             })
         }
     }
@@ -78,8 +86,15 @@ impl Parser {
         while let Some(token) = self.lexer.next() {
             let next_statement: Result<Statement> = match token.kind {
                 Kind::Let => self.parse_let_statement(token),
-                other => panic!("I don't know what to do when I get an invalid token here yet")
+                _ => Err(
+                    StatementError::unexpected_token(
+                        "top level declaration",
+                        &token,
+                        PARSING_A_PROGRAM
+                    )
+                )
             };
+
             if let Ok(statement) = next_statement {
                 statements.push(statement);
             } else {
@@ -150,17 +165,20 @@ mod tests {
             },
         }
     }
+
+    fn parser_from_source(source: &str) -> Parser {
+        Parser::new(source.to_source().into_tokens())
+    }
     
     #[test]
     fn can_parse_a_program_with_only_let_statements() -> Result<()> {
-        let input: &str = indoc!{"
+        let source: &str = indoc!{"
         let x = 5;
         let y = 10;
         let foobar = 838383;
         "};
 
-        let lexer = input.to_source().into_tokens();
-        let mut parser = Parser::new(lexer);
+        let mut parser = parser_from_source(source);
         let program = parser.parse()?;
 
         assert_eq!(3, program.statements().len());
@@ -176,5 +194,22 @@ mod tests {
             );
 
         Ok(())
+    }
+
+    #[test]
+    fn raises_an_error_when_parsing_an_invalid_let_statement() {
+        let source: &str = indoc!{"
+        let x = 5;
+        let y = 10;
+        let 838383;
+        "};
+
+        let mut parser = parser_from_source(source);
+        let result = parser.parse();
+        assert!(result.is_err());
+        match result.err().unwrap().kind {
+            ErrorKind::Parse(parse_error) => assert!(!parse_error.errors.is_empty()),
+            other => panic!("expected an ErrorKind::ParseError but got {:?}", other),
+        }
     }
 }

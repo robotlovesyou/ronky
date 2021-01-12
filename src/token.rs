@@ -1,3 +1,5 @@
+use std::fmt::Formatter;
+
 #[derive(Eq, PartialEq, Debug)]
 pub enum Kind {
     Illegal(char),
@@ -104,9 +106,9 @@ pub enum Tag {
     Return,
 }
 
-impl std::string::ToString for Tag {
-    fn to_string(&self) -> String {
-        match self {
+impl std::fmt::Display for Tag {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let display = match self {
             Tag::Illegal => "illegal",
             Tag::Ident => "identifier",
             Tag::Int => "integer",
@@ -133,7 +135,8 @@ impl std::string::ToString for Tag {
             Tag::If => "if",
             Tag::Else => "else",
             Tag::Return => "return",
-        }.to_string()
+        };
+        write!(f, "{}", display)
     }
 }
 
