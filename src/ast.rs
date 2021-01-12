@@ -8,6 +8,18 @@ pub struct Program {
     statements: Vec<Statement>,
 }
 
+impl Program {
+    pub fn statements(&self) -> &[Statement] {
+        &self.statements
+    }
+}
+
+impl Program {
+    pub fn new(statements: Vec<Statement>) -> Program {
+        Program{statements}
+    }
+}
+
 impl Node for Program {
     fn token_literal(&self) -> String {
         self
@@ -19,8 +31,14 @@ impl Node for Program {
     }
 }
 
-struct Statement {
+pub struct Statement {
     kind: StatementKind
+}
+
+impl Statement {
+    pub fn kind(&self) -> &StatementKind {
+        &self.kind
+    }
 }
 
 impl Node for Statement {
@@ -31,11 +49,11 @@ impl Node for Statement {
     }
 }
 
-enum StatementKind {
+pub enum StatementKind {
     Let(LetStatement)
 }
 
-struct Expression {
+pub struct Expression {
 
 }
 
@@ -45,19 +63,19 @@ impl Node for Expression {
     }
 }
 
-struct Identifier {
+pub struct Identifier {
     token: Token,
 }
 
 impl Identifier {
-    fn new(token: Token) -> Identifier {
+    pub fn new(token: Token) -> Identifier {
         match token.kind {
             Kind::Ident(_) => Identifier{token},
             other => panic!("{:?} is not an Ident token", other),
         }
     }
 
-    fn name(&self) -> &str {
+    pub fn name(&self) -> &str {
         match &self.token.kind {
             Kind::Ident(name) => name.as_str(),
             _ => unreachable!(),
@@ -65,13 +83,35 @@ impl Identifier {
     }
 }
 
-enum ExpressionKind {
+pub enum ExpressionKind {
 }
 
-struct LetStatement {
+pub struct LetStatement {
     token: Token,
     name: Identifier,
-    value: Expression
+    //value: Expression
+}
+
+impl LetStatement {
+    pub fn new(token: Token, name: Identifier) -> Statement {
+        Statement{
+            kind: StatementKind::Let(LetStatement{
+                token,
+                name,
+            })
+        }
+    }
+    pub fn token(&self) -> &Token {
+        &self.token
+    }
+
+    pub fn name(&self) -> &Identifier {
+        &self.name
+    }
+
+    // pub fn value(&self) -> &Expression {
+    //     &self.value
+    // }
 }
 
 impl std::string::ToString for LetStatement {
