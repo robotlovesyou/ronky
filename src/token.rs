@@ -1,4 +1,4 @@
-use std::fmt::Formatter;
+use std::fmt::{self, Display, Formatter};
 
 #[derive(Eq, PartialEq, Debug)]
 pub enum Kind {
@@ -70,13 +70,47 @@ impl Kind {
     }
 }
 
-impl std::string::ToString for Kind {
-    fn to_string(&self) -> String {
-        self.tag().to_string()
+// impl std::string::ToString for Kind {
+//     fn to_string(&self) -> String {
+//         self.tag().to_string()
+//     }
+// }
+
+impl fmt::Display for Kind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let display = match self {
+            Kind::Illegal(ref illegal) => illegal.to_string(),
+            Kind::Ident(ref ident) => ident.to_string(),
+            Kind::Int(repr) => repr.to_string(),
+            Kind::Assign => "=".to_string(),
+            Kind::Plus => "+".to_string(),
+            Kind::Minus => "-".to_string(),
+            Kind::Bang => "!".to_string(),
+            Kind::Asterisk => "*".to_string(),
+            Kind::Slash => "/".to_string(),
+            Kind::LT => "<".to_string(),
+            Kind::GT => ">".to_string(),
+            Kind::EQ => "==".to_string(),
+            Kind::NotEQ => "!=".to_string(),
+            Kind::Comma => ",".to_string(),
+            Kind::Semicolon => ";".to_string(),
+            Kind::LParen => "(".to_string(),
+            Kind::RParen => ")".to_string(),
+            Kind::LBrace => "{".to_string(),
+            Kind::RBrace => "}".to_string(),
+            Kind::Function => "function".to_string(),
+            Kind::Let => "let".to_string(),
+            Kind::True => "true".to_string(),
+            Kind::False => "false".to_string(),
+            Kind::If => "if".to_string(),
+            Kind::Else => "else".to_string(),
+            Kind::Return => "return".to_string(),
+        };
+        write!(f, "{}", display)
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub enum Tag {
     Illegal,
     Ident,
@@ -153,9 +187,9 @@ impl Token {
     }
 }
 
-impl std::string::ToString for Token {
-    fn to_string(&self) -> String {
-        format!("{:?}", self)
+impl std::fmt::Display for Token {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.kind)
     }
 }
 

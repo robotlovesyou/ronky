@@ -1,6 +1,7 @@
+use std::fmt::{self, Display, Formatter};
 use crate::token::{Token, Kind};
 
-trait Node {
+trait Node: Display {
     fn token_literal(&self) -> String;
 }
 
@@ -20,6 +21,16 @@ impl Program {
     }
 }
 
+impl Display for Program {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut buffer = Vec::new();
+        for stmt in self.statements.iter() {
+            buffer.push(format!("{}", stmt));
+        }
+        write!(f, "{}", buffer.join("\n"))
+    }
+}
+
 impl Node for Program {
     fn token_literal(&self) -> String {
         self
@@ -36,25 +47,85 @@ pub struct Statement {
 }
 
 impl Statement {
+    pub fn new(kind: StatementKind) -> Statement {
+        Statement{
+            kind
+        }
+    }
+    pub fn token(&self) -> &Token {
+        &self.kind.token()
+    }
+
     pub fn kind(&self) -> &StatementKind {
         &self.kind
     }
 }
 
+impl Display for Statement {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {}", self.token(), self.kind)
+    }
+}
+
 impl Node for Statement {
     fn token_literal(&self) -> String {
-        match &self.kind {
-            StatementKind::Let(ls) => ls.to_string()
+        self.token().to_string()
+    }
+}
+
+#[derive(Debug)]
+pub enum StatementKind {
+    Let(LetStatement),
+    Return(ReturnStatement),
+    Expression(ExpressionStatement),
+}
+
+impl StatementKind {
+    pub fn token(&self) -> &Token {
+        match self {
+            StatementKind::Let(let_statement) =>
+                let_statement.token(),
+            StatementKind::Return(return_statement) =>
+                return_statement.token(),
+            StatementKind::Expression(expression_statement) =>
+                expression_statement.token()
         }
     }
 }
 
-pub enum StatementKind {
-    Let(LetStatement)
+impl Display for StatementKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            StatementKind::Let(ref let_statement) => let_statement.fmt(f),
+            StatementKind::Return(ref return_statement) => return_statement.fmt(f),
+            StatementKind::Expression(ref expression_statement) => expression_statement.fmt(f)
+        }
+    }
 }
 
+#[derive(Debug)]
 pub struct Expression {
+    kind: ExpressionKind,
+}
 
+impl Expression {
+    pub fn new(kind: ExpressionKind) -> Expression {
+        Expression { kind }
+    }
+
+    pub fn kind(&self) -> &ExpressionKind {
+        &self.kind
+    }
+
+    pub fn token(&self) -> &Token {
+        &self.kind.token()
+    }
+}
+
+impl Display for Expression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        unimplemented!()
+    }
 }
 
 impl Node for Expression {
@@ -63,6 +134,7 @@ impl Node for Expression {
     }
 }
 
+#[derive(Debug)]
 pub struct Identifier {
     token: Token,
 }
@@ -83,9 +155,71 @@ impl Identifier {
     }
 }
 
-pub enum ExpressionKind {
+impl Display for Identifier {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.token.fmt(f)
+    }
 }
 
+#[derive(Debug)]
+pub enum ExpressionKind {
+    Identifier(IdentifierExpression)
+}
+
+impl ExpressionKind {
+    pub fn token(&self) -> &Token {
+        match self {
+            ExpressionKind::Identifier(identifier_expression) =>
+                identifier_expression.token(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct IdentifierExpression {
+    identifier: Identifier,
+}
+
+impl IdentifierExpression {
+    pub fn new(identifier: Identifier) -> Expression {
+        Expression::new(ExpressionKind::Identifier(
+            IdentifierExpression{
+                identifier
+            }
+        ))
+    }
+
+    pub fn token(&self) -> &Token {
+        &self.identifier.token
+    }
+}
+
+#[derive(Debug)]
+pub struct ExpressionStatement {
+    expression: Expression
+}
+
+impl ExpressionStatement {
+    pub fn new(expression: Expression) -> Statement {
+        Statement::new(StatementKind::Expression(ExpressionStatement{expression}))
+    }
+
+    pub fn expression(&self) -> &Expression {
+        &self.expression
+    }
+
+    pub fn token(&self) -> &Token {
+        self.expression.token()
+    }
+}
+
+impl Display for ExpressionStatement {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "//expression goes here")
+    }
+}
+
+#[derive(Debug)]
 pub struct LetStatement {
     token: Token,
     name: Identifier,
@@ -94,19 +228,18 @@ pub struct LetStatement {
 
 impl LetStatement {
     pub fn new(token: Token, name: Identifier) -> Statement {
-        Statement{
-            kind: StatementKind::Let(LetStatement{
-                token,
-                name,
-            })
-        }
-    }
-    pub fn token(&self) -> &Token {
-        &self.token
+        Statement::new(StatementKind::Let(LetStatement{
+            token,
+            name,
+        }))
     }
 
     pub fn name(&self) -> &Identifier {
         &self.name
+    }
+
+    pub fn token(&self) -> &Token {
+        &self.token
     }
 
     // pub fn value(&self) -> &Expression {
@@ -114,9 +247,36 @@ impl LetStatement {
     // }
 }
 
-impl std::string::ToString for LetStatement {
-    fn to_string(&self) -> String {
-        self.token.to_string()
+impl Display for LetStatement {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{} = //expression goes here", self.name)
+    }
+}
+
+
+#[derive(Debug)]
+pub struct ReturnStatement {
+    token: Token
+    //value: Expression
+}
+
+impl ReturnStatement {
+    pub fn new(token: Token) -> Statement {
+        Statement::new(StatementKind::Return(
+            ReturnStatement{
+                token
+            }
+        ))
+    }
+
+    pub fn token(&self) -> &Token {
+        &self.token
+    }
+}
+
+impl Display for ReturnStatement {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "//expression goes here")
     }
 }
 
