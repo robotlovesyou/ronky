@@ -86,8 +86,8 @@ pub type Result<T> = result::Result<T, Error>;
 
 struct Parser {
     lexer: Peekable<Lexer>,
-    prefix_parse_fns: HashMap<Tag, Rc<PrefixParseFn>>,
-    infix_parse_fns: HashMap<Tag, Rc<InfixParseFn>>,
+    prefix_parse_fns: HashMap<Tag, Rc<dyn Fn(&mut Parser, Token) -> Result<Expression>>>,
+    infix_parse_fns: HashMap<Tag, Rc<dyn Fn(&mut Parser, Token) -> Result<Expression>>>,
 }
 
 impl Parser {
@@ -97,16 +97,28 @@ impl Parser {
             prefix_parse_fns: HashMap::new(),
             infix_parse_fns: HashMap::new(),
         };
-        parser.register_prefix_fn(Tag::Ident, Rc::new(|parser, token| parser.parse_identifier_expression(token)));
+
+        parser.register_prefix_fn(
+            Tag::Ident,
+            |parser: &mut Parser, token: Token| parser.parse_identifier_expression(token)
+        );
+
+        parser.register_prefix_fn(
+            Tag::Int,
+            |parser: &mut Parser, token: Token| parser.parse_integer_literal_expression(token)
+        );
+
         parser
     }
 
-    fn register_prefix_fn(&mut self, tag: Tag, f: Rc<PrefixParseFn>) {
-        self.prefix_parse_fns.insert(tag, f);
+    fn register_prefix_fn<F>(&mut self, tag: Tag, f: F)
+        where F: 'static + Fn(&mut Parser, Token) -> Result<Expression> {
+        self.prefix_parse_fns.insert(tag, Rc::new(f));
     }
 
-    fn register_infix_fn(&mut self, tag: Tag, f: Rc<InfixParseFn>) {
-        self.infix_parse_fns.insert(tag, f);
+    fn register_infix_fn<F>(&mut self, tag: Tag, f: F)
+        where F: 'static + Fn(&mut Parser, Token) -> Result<Expression> {
+        self.infix_parse_fns.insert(tag, Rc::new(f));
     }
 
     pub fn parse(&mut self) -> Result<Program> {
@@ -162,6 +174,17 @@ impl Parser {
 
     fn parse_identifier_expression(&mut self, token: Token) -> Result<Expression> {
         Ok(IdentifierExpression::new(Identifier::new(token)))
+    }
+
+    fn parse_integer_literal_expression(&mut self, token: Token) -> Result<Expression> {
+        let value = match &token.kind {
+            // Anything which does not parse as an i64 here would indicate a bug in the
+            // lexer so ok to expect
+            Kind::Int(repr) => repr.parse::<i64>().expect("not an integer literal"),
+            other => panic!("got {:?} expecting an Int"),
+        };
+
+        Ok(IntegerLiteralExpression::new(token, value))
     }
 
     fn consume_source_line(&mut self) {
@@ -229,9 +252,6 @@ impl Parser {
         }
     }
 }
-
-type PrefixParseFn = dyn Fn(&mut Parser, Token) -> Result<Expression>;
-type InfixParseFn = dyn Fn(&mut Parser, Token, Expression) -> Result<Expression>;
 
 #[cfg(test)]
 mod tests {
@@ -313,6 +333,15 @@ mod tests {
         Ok(())
     }
 
+    fn test_statement_as_expression_statement<T>(statement: &Statement, t: T)
+    where T: Fn(&ExpressionKind) -> () {
+        match statement.kind() {
+            StatementKind::Expression(expression_statement) =>
+                t(expression_statement.expression().kind()),
+            other => panic!("got {} when expecting an ExpressionStatement", other),
+        }
+    }
+
     #[test]
     fn can_parse_an_identifier_expression() -> Result<()> {
         let source = "foobar";
@@ -320,11 +349,40 @@ mod tests {
         let mut parser = parser_from_source(source);
         let program = parser.parse()?;
         assert_eq!(1, program.statements().len());
-        assert!(matches!(program.statements().first().unwrap().kind(), StatementKind::Expression(_)));
-        if let StatementKind::Expression(expression_statement) = program.statements().first().unwrap().kind() {
-            assert!(matches!(expression_statement.expression().kind(), ExpressionKind::Identifier(_)));
-            assert_eq!("foobar", expression_statement.expression().token().to_string());
-        }
+        test_statement_as_expression_statement(
+            program.statements().first().unwrap(),
+            |ek| {
+                match ek {
+                    ExpressionKind::Identifier(identifier) =>
+                        assert_eq!("foobar", identifier.to_string()),
+                    other =>
+                        panic!("got {:?} expecting an identifier expression", other),
+                }
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn can_parse_an_integer_literal_expression() -> Result<()> {
+        let source = "5;";
+
+        let mut parser = parser_from_source(source);
+        let program = parser.parse()?;
+        assert_eq!(1, program.statements().len());
+        test_statement_as_expression_statement(
+            program.statements().first().unwrap(),
+            |ek| {
+                match ek {
+                    ExpressionKind::IntegerLiteral(integer) => {
+                        assert_eq!(5, integer.value());
+                        assert_eq!("5", integer.to_string());
+                    },
+                    other =>
+                        panic!("got {:?} expecting an integer expression", other)
+                }
+            }
+        );
         Ok(())
     }
 }

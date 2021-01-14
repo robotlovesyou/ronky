@@ -163,7 +163,8 @@ impl Display for Identifier {
 
 #[derive(Debug)]
 pub enum ExpressionKind {
-    Identifier(IdentifierExpression)
+    Identifier(IdentifierExpression),
+    IntegerLiteral(IntegerLiteralExpression),
 }
 
 impl ExpressionKind {
@@ -171,6 +172,17 @@ impl ExpressionKind {
         match self {
             ExpressionKind::Identifier(identifier_expression) =>
                 identifier_expression.token(),
+            ExpressionKind::IntegerLiteral(integer_literal) =>
+                integer_literal.token(),
+        }
+    }
+}
+
+impl Display for ExpressionKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            ExpressionKind::Identifier(kind) => kind.fmt(f),
+            ExpressionKind::IntegerLiteral(kind) => kind.fmt(f),
         }
     }
 }
@@ -193,6 +205,44 @@ impl IdentifierExpression {
         &self.identifier.token
     }
 }
+
+impl Display for IdentifierExpression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.identifier.token)
+    }
+}
+
+#[derive(Debug)]
+pub struct IntegerLiteralExpression {
+    token: Token,
+    value: i64,
+}
+
+impl IntegerLiteralExpression {
+    pub fn new(token: Token, value: i64) -> Expression {
+        Expression::new(ExpressionKind::IntegerLiteral(
+            IntegerLiteralExpression{
+                token,
+                value,
+            }
+        ))
+    }
+
+    pub fn token(&self) -> &Token {
+        &self.token
+    }
+
+    pub fn value(&self) -> i64 {
+        self.value
+    }
+}
+
+impl Display for IntegerLiteralExpression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.value)
+    }
+}
+
 
 #[derive(Debug)]
 pub struct ExpressionStatement {
