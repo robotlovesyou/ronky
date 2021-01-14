@@ -86,7 +86,24 @@ pub type Result<T> = result::Result<T, Error>;
 struct Parser {
     lexer: Peekable<Lexer>,
     prefix_parse_fns: HashMap<Tag, Rc<dyn Fn(&mut Parser, Token) -> Result<Expression>>>,
-    infix_parse_fns: HashMap<Tag, Rc<dyn Fn(&mut Parser, Token) -> Result<Expression>>>,
+    infix_parse_fns: HashMap<Tag, Rc<dyn Fn(&mut Parser, Expression, Token) -> Result<Expression>>>,
+}
+
+fn operator_precedence(token: &Token) -> Precedence {
+    use crate::token::Tag::*;
+    use Precedence::*;
+
+    match token.kind.tag() {
+        Plus => Sum,
+        Minus => Sum,
+        Asterisk => Product,
+        Slash => Product,
+        LT => LessGreater,
+        GT => LessGreater,
+        EQ => Equals,
+        NotEQ => Equals,
+        _ => Lowest
+    }
 }
 
 impl Parser {
@@ -113,6 +130,54 @@ impl Parser {
             parser.parse_prefix_expression(token)
         });
 
+        parser.register_infix_fn(
+            Tag::Plus,
+            |parser: &mut Parser, left: Expression, token: Token| {
+            parser.parse_infix_expression(left, token)
+        });
+
+        parser.register_infix_fn(
+            Tag::Minus,
+            |parser: &mut Parser, left: Expression, token: Token| {
+                parser.parse_infix_expression(left, token)
+            });
+
+        parser.register_infix_fn(
+            Tag::Asterisk,
+            |parser: &mut Parser, left: Expression, token: Token| {
+                parser.parse_infix_expression(left, token)
+            });
+
+        parser.register_infix_fn(
+            Tag::Slash,
+            |parser: &mut Parser, left: Expression, token: Token| {
+                parser.parse_infix_expression(left, token)
+            });
+
+        parser.register_infix_fn(
+            Tag::GT,
+            |parser: &mut Parser, left: Expression, token: Token| {
+                parser.parse_infix_expression(left, token)
+            });
+
+        parser.register_infix_fn(
+            Tag::LT,
+            |parser: &mut Parser, left: Expression, token: Token| {
+                parser.parse_infix_expression(left, token)
+            });
+
+        parser.register_infix_fn(
+            Tag::EQ,
+            |parser: &mut Parser, left: Expression, token: Token| {
+                parser.parse_infix_expression(left, token)
+            });
+
+        parser.register_infix_fn(
+            Tag::NotEQ,
+            |parser: &mut Parser, left: Expression, token: Token| {
+                parser.parse_infix_expression(left, token)
+            });
+
         parser
     }
 
@@ -125,7 +190,7 @@ impl Parser {
 
     fn register_infix_fn<F>(&mut self, tag: Tag, f: F)
     where
-        F: 'static + Fn(&mut Parser, Token) -> Result<Expression>,
+        F: 'static + Fn(&mut Parser, Expression, Token) -> Result<Expression>,
     {
         self.infix_parse_fns.insert(tag, Rc::new(f));
     }
@@ -175,10 +240,27 @@ impl Parser {
         let prefix_f = self
             .prefix_parse_fns
             .get(&token.kind.tag())
+            //TODO don't panic here, raise an error
             .expect("no prefix parse fn")
             .clone();
 
-        prefix_f(self, token)
+        let mut left = prefix_f(self, token)?;
+        while let Some(peek) = self.lexer.peek() {
+            if peek.kind.tag() == Tag::Semicolon || precedence >= operator_precedence(peek) {
+                break;
+            }
+            let next_token = self.lexer.next().expect("no token");
+            let infix_f = self
+                .infix_parse_fns
+                .get(&next_token.kind.tag())
+                //TODO don't panic here, raise an error
+                .expect("no infix parse fn")
+                .clone();
+
+            left = infix_f(self, left, next_token)?;
+        }
+
+        Ok(left)
     }
 
     fn parse_identifier_expression(&mut self, token: Token) -> Result<Expression> {
@@ -198,14 +280,36 @@ impl Parser {
 
     fn parse_prefix_expression(&mut self, token: Token) -> Result<Expression> {
         let operator = match token.kind {
-            Kind::Bang => Operator::Not,
-            Kind::Minus => Operator::Minus,
+            Kind::Bang => PrefixOperator::Not,
+            Kind::Minus => PrefixOperator::Minus,
+            //TODO raise an error here, don't panic
             other => panic!("{:?} is not a prefix operator"),
         };
 
         let next_token = self.expect_next()?;
         let right = self.parse_expression(next_token, Precedence::Prefix)?;
         Ok(PrefixExpression::new(token, operator, right))
+    }
+
+    fn parse_infix_expression(&mut self, left: Expression, token: Token) -> Result<Expression> {
+        use crate::token::Tag::*;
+        use InfixOperator::*;
+        let operator = match token.kind.tag() {
+            Plus => Add,
+            Minus => Subtract,
+            Asterisk => Multiply,
+            Slash => Divide,
+            LT => LessThan,
+            GT => GreaterThan,
+            EQ => Equals,
+            NotEQ => NotEquals,
+            //TODO raise an error here, don't panic
+            other => panic!("{:?} is not an infix operator", other)
+        };
+
+        let next_token = self.expect_next()?;
+        let right = self.parse_expression(next_token, operator_precedence(&token))?;
+        Ok(InfixExpression::new(left, right, operator))
     }
 
     fn consume_source_line(&mut self) {
@@ -411,7 +515,7 @@ mod tests {
 
     #[test]
     fn can_parse_prefix_expressions() -> Result<()> {
-        let prefix_tests = vec![("!5", Operator::Not, 5), ("-15", Operator::Minus, 15)];
+        let prefix_tests = vec![("!5", PrefixOperator::Not, 5), ("-15", PrefixOperator::Minus, 15)];
 
         for (source, operator, value) in prefix_tests {
             let mut parser = parser_from_source(source);
@@ -426,14 +530,51 @@ mod tests {
                             ExpressionKind::IntegerLiteral(integer) => {
                                 test_integer_literal(integer, value);
                             }
-                            other => panic!("got {:?} expecing an integer literal"),
+                            other => panic!("got {:?} expecting an integer literal"),
                         }
                     }
-                    other => panic!("got {:?} expecting an integer expression"),
+                    other => panic!("got {:?} expecting a prefix expression"),
                 }
             })
         }
+        Ok(())
+    }
 
+    #[test]
+    fn can_parse_infix_expressions() -> Result<()> {
+        use super::InfixOperator::*;
+        use super::ExpressionKind::*;
+        let infix_tests = vec![
+            ("5 + 5;", 5u64, Add, 5u64),
+            ("5 - 5;", 5, Subtract, 5),
+            ("5 * 5;", 5, Multiply, 5),
+            ("5 / 5;", 5, Divide, 5),
+            ("5 > 5;", 5, GreaterThan, 5),
+            ("5 < 5;", 5, LessThan, 5),
+            ("5 == 5;", 5, Equals, 5),
+            ("5 != 5;", 5, NotEquals, 5),
+        ];
+
+        let match_int_lit = |ek: &ExpressionKind, expected: i64, lr: &str| match ek {
+            IntegerLiteral(integer) => assert_eq!(expected, integer.value(), "{} does not match", lr),
+            other => panic!("got {:?} expecting an IntegerLiteral")
+        };
+
+        for (source, left, operator, right) in infix_tests {
+            let mut parser = parser_from_source(source);
+            let program = parser.parse()?;
+
+            assert_eq!(1, program.statements().len());
+            test_statement_as_expression_statement(program.statements().first().unwrap(), |ek| {
+               match ek {
+                   Infix(infix) => {
+                       match_int_lit(infix.left().kind(), 5, "left");
+                       match_int_lit(infix.right().kind(), 5, "right");
+                   },
+                   other => panic!("got {:?} expecting an infix expression", other)
+               }
+            });
+        }
         Ok(())
     }
 }

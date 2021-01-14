@@ -2,9 +2,49 @@ use crate::token::{Kind, Token};
 use std::fmt::{self, Display, Formatter};
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
-pub enum Operator {
+pub enum PrefixOperator {
     Minus,
     Not,
+}
+
+impl Display for PrefixOperator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        use self::PrefixOperator::*;
+        let repr = match self {
+            Minus => Kind::Minus,
+            Not => Kind::Bang,
+        };
+        write!(f, "{}", repr)
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum InfixOperator {
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    GreaterThan,
+    LessThan,
+    Equals,
+    NotEquals,
+}
+
+impl Display for InfixOperator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        use self::InfixOperator::*;
+        let repr = match self {
+            Add => Kind::Plus,
+            Subtract => Kind::Minus,
+            Multiply => Kind::Asterisk,
+            Divide => Kind::Slash,
+            GreaterThan => Kind::GT,
+            LessThan => Kind::LT,
+            Equals => Kind::EQ,
+            NotEquals => Kind::NotEQ,
+        };
+        write!(f, "{}", repr)
+    }
 }
 
 trait Node: Display {
@@ -83,20 +123,22 @@ pub enum StatementKind {
 
 impl StatementKind {
     pub fn token(&self) -> &Token {
+        use self::StatementKind::*;
         match self {
-            StatementKind::Let(let_statement) => let_statement.token(),
-            StatementKind::Return(return_statement) => return_statement.token(),
-            StatementKind::Expression(expression_statement) => expression_statement.token(),
+            Let(let_statement) => let_statement.token(),
+            Return(return_statement) => return_statement.token(),
+            Expression(expression_statement) => expression_statement.token(),
         }
     }
 }
 
 impl Display for StatementKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        use self::StatementKind::*;
         match self {
-            StatementKind::Let(ref let_statement) => let_statement.fmt(f),
-            StatementKind::Return(ref return_statement) => return_statement.fmt(f),
-            StatementKind::Expression(ref expression_statement) => expression_statement.fmt(f),
+            Let(ref let_statement) => let_statement.fmt(f),
+            Return(ref return_statement) => return_statement.fmt(f),
+            Expression(ref expression_statement) => expression_statement.fmt(f),
         }
     }
 }
@@ -164,25 +206,36 @@ pub enum ExpressionKind {
     Identifier(IdentifierExpression),
     IntegerLiteral(IntegerLiteralExpression),
     Prefix(PrefixExpression),
+    Infix(InfixExpression)
 }
 
 impl ExpressionKind {
     pub fn token(&self) -> &Token {
+        use self::ExpressionKind::*;
         match self {
-            ExpressionKind::Identifier(identifier_expression) => identifier_expression.token(),
-            ExpressionKind::IntegerLiteral(integer_literal) => integer_literal.token(),
-            ExpressionKind::Prefix(prefix_expression) => prefix_expression.token(),
+            Identifier(identifier_expression) => identifier_expression.token(),
+            IntegerLiteral(integer_literal) => integer_literal.token(),
+            Prefix(prefix_expression) => prefix_expression.token(),
+            Infix(infix_expression) => infix_expression.token(),
         }
     }
 }
 
 impl Display for ExpressionKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        use self::ExpressionKind::*;
         match self {
-            ExpressionKind::Identifier(kind) => kind.fmt(f),
-            ExpressionKind::IntegerLiteral(kind) => kind.fmt(f),
-            ExpressionKind::Prefix(kind) => kind.fmt(f),
+            Identifier(kind) => kind.fmt(f),
+            IntegerLiteral(kind) => kind.fmt(f),
+            Prefix(kind) => kind.fmt(f),
+            Infix(kind) => kind.fmt(f),
         }
+    }
+}
+
+impl Display for InfixExpression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "({} {} {})", self.left, self.operator, self.right)
     }
 }
 
@@ -241,12 +294,12 @@ impl Display for IntegerLiteralExpression {
 #[derive(Debug)]
 pub struct PrefixExpression {
     token: Token,
-    operator: Operator,
+    operator: PrefixOperator,
     right: Box<Expression>,
 }
 
 impl PrefixExpression {
-    pub fn new(token: Token, operator: Operator, right_expression: Expression) -> Expression {
+    pub fn new(token: Token, operator: PrefixOperator, right_expression: Expression) -> Expression {
         Expression::new(ExpressionKind::Prefix(PrefixExpression {
             token,
             operator,
@@ -258,7 +311,7 @@ impl PrefixExpression {
         &self.token
     }
 
-    pub fn operator(&self) -> Operator {
+    pub fn operator(&self) -> PrefixOperator {
         self.operator
     }
 
@@ -269,7 +322,42 @@ impl PrefixExpression {
 
 impl Display for PrefixExpression {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "({}{})", self.token, self.right)
+        write!(f, "({}{})", self.operator, self.right)
+    }
+}
+
+#[derive(Debug)]
+pub struct InfixExpression {
+    left: Box<Expression>,
+    right: Box<Expression>,
+    operator: InfixOperator,
+}
+
+impl InfixExpression {
+    pub fn new(left: Expression, right: Expression, operator: InfixOperator) -> Expression {
+        Expression::new(ExpressionKind::Infix(
+            InfixExpression {
+                left: Box::new(left),
+                right: Box::new(right),
+                operator,
+            }
+        ))
+    }
+
+    pub fn token(&self) -> &Token {
+        &self.left.token()
+    }
+
+    pub fn left(&self) -> &Box<Expression> {
+        &self.left
+    }
+
+    pub fn right(&self) -> &Box<Expression> {
+        &self.right
+    }
+
+    pub fn operator(&self) -> InfixOperator {
+        self.operator
     }
 }
 
