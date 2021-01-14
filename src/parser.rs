@@ -102,7 +102,7 @@ fn operator_precedence(token: &Token) -> Precedence {
         GT => LessGreater,
         EQ => Equals,
         NotEQ => Equals,
-        _ => Lowest
+        _ => Lowest,
     }
 }
 
@@ -133,50 +133,58 @@ impl Parser {
         parser.register_infix_fn(
             Tag::Plus,
             |parser: &mut Parser, left: Expression, token: Token| {
-            parser.parse_infix_expression(left, token)
-        });
+                parser.parse_infix_expression(left, token)
+            },
+        );
 
         parser.register_infix_fn(
             Tag::Minus,
             |parser: &mut Parser, left: Expression, token: Token| {
                 parser.parse_infix_expression(left, token)
-            });
+            },
+        );
 
         parser.register_infix_fn(
             Tag::Asterisk,
             |parser: &mut Parser, left: Expression, token: Token| {
                 parser.parse_infix_expression(left, token)
-            });
+            },
+        );
 
         parser.register_infix_fn(
             Tag::Slash,
             |parser: &mut Parser, left: Expression, token: Token| {
                 parser.parse_infix_expression(left, token)
-            });
+            },
+        );
 
         parser.register_infix_fn(
             Tag::GT,
             |parser: &mut Parser, left: Expression, token: Token| {
                 parser.parse_infix_expression(left, token)
-            });
+            },
+        );
 
         parser.register_infix_fn(
             Tag::LT,
             |parser: &mut Parser, left: Expression, token: Token| {
                 parser.parse_infix_expression(left, token)
-            });
+            },
+        );
 
         parser.register_infix_fn(
             Tag::EQ,
             |parser: &mut Parser, left: Expression, token: Token| {
                 parser.parse_infix_expression(left, token)
-            });
+            },
+        );
 
         parser.register_infix_fn(
             Tag::NotEQ,
             |parser: &mut Parser, left: Expression, token: Token| {
                 parser.parse_infix_expression(left, token)
-            });
+            },
+        );
 
         parser
     }
@@ -304,7 +312,7 @@ impl Parser {
             EQ => Equals,
             NotEQ => NotEquals,
             //TODO raise an error here, don't panic
-            other => panic!("{:?} is not an infix operator", other)
+            other => panic!("{:?} is not an infix operator", other),
         };
 
         let next_token = self.expect_next()?;
@@ -515,7 +523,10 @@ mod tests {
 
     #[test]
     fn can_parse_prefix_expressions() -> Result<()> {
-        let prefix_tests = vec![("!5", PrefixOperator::Not, 5), ("-15", PrefixOperator::Minus, 15)];
+        let prefix_tests = vec![
+            ("!5", PrefixOperator::Not, 5),
+            ("-15", PrefixOperator::Minus, 15),
+        ];
 
         for (source, operator, value) in prefix_tests {
             let mut parser = parser_from_source(source);
@@ -542,8 +553,8 @@ mod tests {
 
     #[test]
     fn can_parse_infix_expressions() -> Result<()> {
-        use super::InfixOperator::*;
         use super::ExpressionKind::*;
+        use super::InfixOperator::*;
         let infix_tests = vec![
             ("5 + 5;", 5u64, Add, 5u64),
             ("5 - 5;", 5, Subtract, 5),
@@ -556,8 +567,10 @@ mod tests {
         ];
 
         let match_int_lit = |ek: &ExpressionKind, expected: i64, lr: &str| match ek {
-            IntegerLiteral(integer) => assert_eq!(expected, integer.value(), "{} does not match", lr),
-            other => panic!("got {:?} expecting an IntegerLiteral")
+            IntegerLiteral(integer) => {
+                assert_eq!(expected, integer.value(), "{} does not match", lr)
+            }
+            other => panic!("got {:?} expecting an IntegerLiteral"),
         };
 
         for (source, left, operator, right) in infix_tests {
@@ -566,13 +579,13 @@ mod tests {
 
             assert_eq!(1, program.statements().len());
             test_statement_as_expression_statement(program.statements().first().unwrap(), |ek| {
-               match ek {
-                   Infix(infix) => {
-                       match_int_lit(infix.left().kind(), 5, "left");
-                       match_int_lit(infix.right().kind(), 5, "right");
-                   },
-                   other => panic!("got {:?} expecting an infix expression", other)
-               }
+                match ek {
+                    Infix(infix) => {
+                        match_int_lit(infix.left().kind(), 5, "left");
+                        match_int_lit(infix.right().kind(), 5, "right");
+                    }
+                    other => panic!("got {:?} expecting an infix expression", other),
+                }
             });
         }
         Ok(())

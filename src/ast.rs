@@ -206,7 +206,7 @@ pub enum ExpressionKind {
     Identifier(IdentifierExpression),
     IntegerLiteral(IntegerLiteralExpression),
     Prefix(PrefixExpression),
-    Infix(InfixExpression)
+    Infix(InfixExpression),
 }
 
 impl ExpressionKind {
@@ -335,13 +335,11 @@ pub struct InfixExpression {
 
 impl InfixExpression {
     pub fn new(left: Expression, right: Expression, operator: InfixOperator) -> Expression {
-        Expression::new(ExpressionKind::Infix(
-            InfixExpression {
-                left: Box::new(left),
-                right: Box::new(right),
-                operator,
-            }
-        ))
+        Expression::new(ExpressionKind::Infix(InfixExpression {
+            left: Box::new(left),
+            right: Box::new(right),
+            operator,
+        }))
     }
 
     pub fn token(&self) -> &Token {
