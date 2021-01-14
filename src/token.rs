@@ -65,7 +65,7 @@ impl Kind {
             Kind::False => Tag::False,
             Kind::If => Tag::If,
             Kind::Else => Tag::Else,
-            Kind::Return => Tag::Return
+            Kind::Return => Tag::Return,
         }
     }
 }
@@ -240,7 +240,7 @@ mod tests {
             (Kind::Else, Tag::Else),
             (Kind::Return, Tag::Return),
         ];
-        
+
         for (kind, tag) in kinds_and_tags.iter() {
             assert_eq!(*tag, kind.tag())
         }

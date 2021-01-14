@@ -1,14 +1,15 @@
-use std::result;
-use std::collections::HashMap;
-use std::fmt::{self, Debug, Display, Formatter};
 use crate::ast::*;
 use crate::lexer::*;
 use crate::token::*;
+use std::collections::HashMap;
+use std::fmt::{self, Debug, Display, Formatter};
 use std::iter::Peekable;
 use std::rc::Rc;
+use std::result;
 
 const PARSING_A_LET_STATEMENT: &'static str = "parsing a let statement";
 const PARSING_A_PROGRAM: &'static str = "parsing a program";
+const PARSING_A_PREFIX_EXPRESSION: &'static str = "parsing a prefix expression";
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
 enum Precedence {
@@ -28,10 +29,10 @@ pub struct ParseError {
 
 impl ParseError {
     fn new(errors: Vec<Error>) -> Error {
-        Error{
+        Error {
             kind: ErrorKind::Parse(ParseError {
                 errors: errors.into_iter().map(|e| Box::new(e)).collect(),
-            })
+            }),
         }
     }
 }
@@ -43,7 +44,7 @@ pub struct StatementError {
 
 impl StatementError {
     fn unexpected_token(expected: &str, got: &Token, action: &str) -> Error {
-        Error{
+        Error {
             kind: ErrorKind::Statement(StatementError {
                 message: format!(
                     "got an {} instead of an {} while {} at line {} column {}",
@@ -52,8 +53,8 @@ impl StatementError {
                     action,
                     got.line,
                     got.column,
-                )
-            })
+                ),
+            }),
         }
     }
 
@@ -62,16 +63,15 @@ impl StatementError {
             kind: ErrorKind::Statement(StatementError {
                 message: format!(
                     "reached the end of the source when expecting a {} while {}",
-                    expected,
-                    action
-                )
-            })
+                    expected, action
+                ),
+            }),
         }
     }
 }
 
 #[derive(Debug)]
-enum ErrorKind{
+enum ErrorKind {
     Parse(ParseError),
     Statement(StatementError),
 }
@@ -83,7 +83,6 @@ pub struct Error {
 
 pub type Result<T> = result::Result<T, Error>;
 
-
 struct Parser {
     lexer: Peekable<Lexer>,
     prefix_parse_fns: HashMap<Tag, Rc<dyn Fn(&mut Parser, Token) -> Result<Expression>>>,
@@ -92,32 +91,42 @@ struct Parser {
 
 impl Parser {
     fn new(lexer: Lexer) -> Parser {
-        let mut parser = Parser{
+        let mut parser = Parser {
             lexer: lexer.peekable(),
             prefix_parse_fns: HashMap::new(),
             infix_parse_fns: HashMap::new(),
         };
 
-        parser.register_prefix_fn(
-            Tag::Ident,
-            |parser: &mut Parser, token: Token| parser.parse_identifier_expression(token)
-        );
+        parser.register_prefix_fn(Tag::Ident, |parser: &mut Parser, token: Token| {
+            parser.parse_identifier_expression(token)
+        });
 
-        parser.register_prefix_fn(
-            Tag::Int,
-            |parser: &mut Parser, token: Token| parser.parse_integer_literal_expression(token)
-        );
+        parser.register_prefix_fn(Tag::Int, |parser: &mut Parser, token: Token| {
+            parser.parse_integer_literal_expression(token)
+        });
+
+        parser.register_prefix_fn(Tag::Minus, |parser: &mut Parser, token: Token| {
+            parser.parse_prefix_expression(token)
+        });
+
+        parser.register_prefix_fn(Tag::Bang, |parser: &mut Parser, token: Token| {
+            parser.parse_prefix_expression(token)
+        });
 
         parser
     }
 
     fn register_prefix_fn<F>(&mut self, tag: Tag, f: F)
-        where F: 'static + Fn(&mut Parser, Token) -> Result<Expression> {
+    where
+        F: 'static + Fn(&mut Parser, Token) -> Result<Expression>,
+    {
         self.prefix_parse_fns.insert(tag, Rc::new(f));
     }
 
     fn register_infix_fn<F>(&mut self, tag: Tag, f: F)
-        where F: 'static + Fn(&mut Parser, Token) -> Result<Expression> {
+    where
+        F: 'static + Fn(&mut Parser, Token) -> Result<Expression>,
+    {
         self.infix_parse_fns.insert(tag, Rc::new(f));
     }
 
@@ -187,6 +196,18 @@ impl Parser {
         Ok(IntegerLiteralExpression::new(token, value))
     }
 
+    fn parse_prefix_expression(&mut self, token: Token) -> Result<Expression> {
+        let operator = match token.kind {
+            Kind::Bang => Operator::Not,
+            Kind::Minus => Operator::Minus,
+            other => panic!("{:?} is not a prefix operator"),
+        };
+
+        let next_token = self.expect_next()?;
+        let right = self.parse_expression(next_token, Precedence::Prefix)?;
+        Ok(PrefixExpression::new(token, operator, right))
+    }
+
     fn consume_source_line(&mut self) {
         while let Some(next) = self.lexer.next() {
             if next.kind.tag() == Tag::Semicolon {
@@ -214,41 +235,40 @@ impl Parser {
                 Err(e)
             }
         }
-
     }
 
-    fn parse_return_statement(&mut self, tkn: Token) -> Result<Statement> {
+    fn parse_return_statement(&mut self, token: Token) -> Result<Statement> {
         //TODO: this should not be consuming the source line but parsing the expression
         self.consume_source_line();
-        Ok(ReturnStatement::new(tkn))
+        Ok(ReturnStatement::new(token))
     }
 
     fn expect_peek_consume(&mut self, tag: Tag, action: &str) -> Result<Token> {
         match self.lexer.peek() {
-            Some(token) if token.kind.tag() == tag => Ok(
-                self.lexer.next().expect("no token")
-            ),
-            Some(token) => Err(
-                StatementError::unexpected_token(
-                    &tag.to_string(),
-                    token,
-                    action
-                )
-            ),
-            None => Err(
-                StatementError::unexpected_eof(
-                    &tag.to_string(),
-                    action
-                )
-            )
+            Some(token) if token.kind.tag() == tag => Ok(self.lexer.next().expect("no token")),
+            Some(token) => Err(StatementError::unexpected_token(
+                &tag.to_string(),
+                token,
+                action,
+            )),
+            None => Err(StatementError::unexpected_eof(&tag.to_string(), action)),
         }
     }
 
     fn optional_peek_consume(&mut self, tag: Tag) -> Option<Token> {
         match self.lexer.peek() {
-            Some(token) if token.kind.tag() == tag  =>
-                Some(self.lexer.next().expect("no token")),
+            Some(token) if token.kind.tag() == tag => Some(self.lexer.next().expect("no token")),
             _ => None,
+        }
+    }
+
+    fn expect_next(&mut self) -> Result<Token> {
+        match self.lexer.next() {
+            None => Err(StatementError::unexpected_eof(
+                "an expression",
+                PARSING_A_PREFIX_EXPRESSION,
+            )),
+            Some(token) => Ok(token),
         }
     }
 }
@@ -260,23 +280,23 @@ mod tests {
     use indoc::indoc;
 
     fn test_let_statement(statement: &Statement, name: &str) {
-        assert!(matches!(statement.kind(),  StatementKind::Let(_)));
+        assert!(matches!(statement.kind(), StatementKind::Let(_)));
 
         match statement.kind() {
             StatementKind::Let(ref let_statement) => {
                 assert_eq!(name, let_statement.name().name())
-            },
-            other => panic!("got a {:?} expecting a let statement", other)
+            }
+            other => panic!("got a {:?} expecting a let statement", other),
         }
     }
 
     fn parser_from_source(source: &str) -> Parser {
         Parser::new(source.to_source().into_tokens())
     }
-    
+
     #[test]
     fn can_parse_a_program_with_only_let_statements() -> Result<()> {
-        let source: &str = indoc!{"
+        let source: &str = indoc! {"
         let x = 5;
         let y = 10;
         let foobar = 838383;
@@ -293,16 +313,14 @@ mod tests {
             .statements()
             .iter()
             .zip(test_names)
-            .for_each(
-                |(stmt, name)| test_let_statement(stmt, name)
-            );
+            .for_each(|(stmt, name)| test_let_statement(stmt, name));
 
         Ok(())
     }
 
     #[test]
     fn raises_an_error_when_parsing_an_invalid_let_statement() {
-        let source = indoc!{"
+        let source = indoc! {"
         let x = 5;
         let y = 10;
         let 838383;
@@ -319,7 +337,7 @@ mod tests {
 
     #[test]
     fn can_parse_a_program_with_only_return_statements() -> Result<()> {
-        let source = indoc!{"
+        let source = indoc! {"
         return 5;
         return 10;
         return 993322;
@@ -329,15 +347,21 @@ mod tests {
         let program = parser.parse()?;
         assert_eq!(3, program.statements().len());
 
-        program.statements().iter().for_each(|stmt| assert!(matches!(stmt.kind(), StatementKind::Return(_))));
+        program
+            .statements()
+            .iter()
+            .for_each(|stmt| assert!(matches!(stmt.kind(), StatementKind::Return(_))));
         Ok(())
     }
 
     fn test_statement_as_expression_statement<T>(statement: &Statement, t: T)
-    where T: Fn(&ExpressionKind) -> () {
+    where
+        T: Fn(&ExpressionKind) -> (),
+    {
         match statement.kind() {
-            StatementKind::Expression(expression_statement) =>
-                t(expression_statement.expression().kind()),
+            StatementKind::Expression(expression_statement) => {
+                t(expression_statement.expression().kind())
+            }
             other => panic!("got {} when expecting an ExpressionStatement", other),
         }
     }
@@ -351,16 +375,19 @@ mod tests {
         assert_eq!(1, program.statements().len());
         test_statement_as_expression_statement(
             program.statements().first().unwrap(),
-            |ek| {
-                match ek {
-                    ExpressionKind::Identifier(identifier) =>
-                        assert_eq!("foobar", identifier.to_string()),
-                    other =>
-                        panic!("got {:?} expecting an identifier expression", other),
+            |ek| match ek {
+                ExpressionKind::Identifier(identifier) => {
+                    assert_eq!("foobar", identifier.to_string())
                 }
-            }
+                other => panic!("got {:?} expecting an identifier expression", other),
+            },
         );
         Ok(())
+    }
+
+    fn test_integer_literal(integer_literal: &IntegerLiteralExpression, expected: i64) {
+        assert_eq!(expected, integer_literal.value());
+        assert_eq!(format!("{}", expected), integer_literal.to_string());
     }
 
     #[test]
@@ -372,17 +399,41 @@ mod tests {
         assert_eq!(1, program.statements().len());
         test_statement_as_expression_statement(
             program.statements().first().unwrap(),
-            |ek| {
-                match ek {
-                    ExpressionKind::IntegerLiteral(integer) => {
-                        assert_eq!(5, integer.value());
-                        assert_eq!("5", integer.to_string());
-                    },
-                    other =>
-                        panic!("got {:?} expecting an integer expression", other)
+            |ek| match ek {
+                ExpressionKind::IntegerLiteral(integer) => {
+                    test_integer_literal(integer, 5);
                 }
-            }
+                other => panic!("got {:?} expecting an integer expression", other),
+            },
         );
+        Ok(())
+    }
+
+    #[test]
+    fn can_parse_prefix_expressions() -> Result<()> {
+        let prefix_tests = vec![("!5", Operator::Not, 5), ("-15", Operator::Minus, 15)];
+
+        for (source, operator, value) in prefix_tests {
+            let mut parser = parser_from_source(source);
+            let program = parser.parse()?;
+
+            assert_eq!(1, program.statements().len());
+            test_statement_as_expression_statement(program.statements().first().unwrap(), |ek| {
+                match ek {
+                    ExpressionKind::Prefix(prefix) => {
+                        assert_eq!(operator, prefix.operator());
+                        match prefix.right().as_ref().kind() {
+                            ExpressionKind::IntegerLiteral(integer) => {
+                                test_integer_literal(integer, value);
+                            }
+                            other => panic!("got {:?} expecing an integer literal"),
+                        }
+                    }
+                    other => panic!("got {:?} expecting an integer expression"),
+                }
+            })
+        }
+
         Ok(())
     }
 }

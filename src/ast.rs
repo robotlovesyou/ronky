@@ -1,5 +1,11 @@
+use crate::token::{Kind, Token};
 use std::fmt::{self, Display, Formatter};
-use crate::token::{Token, Kind};
+
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+pub enum Operator {
+    Minus,
+    Not,
+}
 
 trait Node: Display {
     fn token_literal(&self) -> String;
@@ -17,7 +23,7 @@ impl Program {
 
 impl Program {
     pub fn new(statements: Vec<Statement>) -> Program {
-        Program{statements}
+        Program { statements }
     }
 }
 
@@ -33,24 +39,19 @@ impl Display for Program {
 
 impl Node for Program {
     fn token_literal(&self) -> String {
-        self
-            .statements
+        self.statements
             .first()
-            .map_or_else(
-                || "".to_string(),
-                |statement| statement.token_literal())
+            .map_or_else(|| "".to_string(), |statement| statement.token_literal())
     }
 }
 
 pub struct Statement {
-    kind: StatementKind
+    kind: StatementKind,
 }
 
 impl Statement {
     pub fn new(kind: StatementKind) -> Statement {
-        Statement{
-            kind
-        }
+        Statement { kind }
     }
     pub fn token(&self) -> &Token {
         &self.kind.token()
@@ -83,12 +84,9 @@ pub enum StatementKind {
 impl StatementKind {
     pub fn token(&self) -> &Token {
         match self {
-            StatementKind::Let(let_statement) =>
-                let_statement.token(),
-            StatementKind::Return(return_statement) =>
-                return_statement.token(),
-            StatementKind::Expression(expression_statement) =>
-                expression_statement.token()
+            StatementKind::Let(let_statement) => let_statement.token(),
+            StatementKind::Return(return_statement) => return_statement.token(),
+            StatementKind::Expression(expression_statement) => expression_statement.token(),
         }
     }
 }
@@ -98,7 +96,7 @@ impl Display for StatementKind {
         match self {
             StatementKind::Let(ref let_statement) => let_statement.fmt(f),
             StatementKind::Return(ref return_statement) => return_statement.fmt(f),
-            StatementKind::Expression(ref expression_statement) => expression_statement.fmt(f)
+            StatementKind::Expression(ref expression_statement) => expression_statement.fmt(f),
         }
     }
 }
@@ -142,7 +140,7 @@ pub struct Identifier {
 impl Identifier {
     pub fn new(token: Token) -> Identifier {
         match token.kind {
-            Kind::Ident(_) => Identifier{token},
+            Kind::Ident(_) => Identifier { token },
             other => panic!("{:?} is not an Ident token", other),
         }
     }
@@ -165,15 +163,15 @@ impl Display for Identifier {
 pub enum ExpressionKind {
     Identifier(IdentifierExpression),
     IntegerLiteral(IntegerLiteralExpression),
+    Prefix(PrefixExpression),
 }
 
 impl ExpressionKind {
     pub fn token(&self) -> &Token {
         match self {
-            ExpressionKind::Identifier(identifier_expression) =>
-                identifier_expression.token(),
-            ExpressionKind::IntegerLiteral(integer_literal) =>
-                integer_literal.token(),
+            ExpressionKind::Identifier(identifier_expression) => identifier_expression.token(),
+            ExpressionKind::IntegerLiteral(integer_literal) => integer_literal.token(),
+            ExpressionKind::Prefix(prefix_expression) => prefix_expression.token(),
         }
     }
 }
@@ -183,6 +181,7 @@ impl Display for ExpressionKind {
         match self {
             ExpressionKind::Identifier(kind) => kind.fmt(f),
             ExpressionKind::IntegerLiteral(kind) => kind.fmt(f),
+            ExpressionKind::Prefix(kind) => kind.fmt(f),
         }
     }
 }
@@ -194,11 +193,9 @@ pub struct IdentifierExpression {
 
 impl IdentifierExpression {
     pub fn new(identifier: Identifier) -> Expression {
-        Expression::new(ExpressionKind::Identifier(
-            IdentifierExpression{
-                identifier
-            }
-        ))
+        Expression::new(ExpressionKind::Identifier(IdentifierExpression {
+            identifier,
+        }))
     }
 
     pub fn token(&self) -> &Token {
@@ -220,12 +217,10 @@ pub struct IntegerLiteralExpression {
 
 impl IntegerLiteralExpression {
     pub fn new(token: Token, value: i64) -> Expression {
-        Expression::new(ExpressionKind::IntegerLiteral(
-            IntegerLiteralExpression{
-                token,
-                value,
-            }
-        ))
+        Expression::new(ExpressionKind::IntegerLiteral(IntegerLiteralExpression {
+            token,
+            value,
+        }))
     }
 
     pub fn token(&self) -> &Token {
@@ -243,15 +238,51 @@ impl Display for IntegerLiteralExpression {
     }
 }
 
+#[derive(Debug)]
+pub struct PrefixExpression {
+    token: Token,
+    operator: Operator,
+    right: Box<Expression>,
+}
+
+impl PrefixExpression {
+    pub fn new(token: Token, operator: Operator, right_expression: Expression) -> Expression {
+        Expression::new(ExpressionKind::Prefix(PrefixExpression {
+            token,
+            operator,
+            right: Box::new(right_expression),
+        }))
+    }
+
+    pub fn token(&self) -> &Token {
+        &self.token
+    }
+
+    pub fn operator(&self) -> Operator {
+        self.operator
+    }
+
+    pub fn right(&self) -> &Box<Expression> {
+        &self.right
+    }
+}
+
+impl Display for PrefixExpression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "({}{})", self.token, self.right)
+    }
+}
 
 #[derive(Debug)]
 pub struct ExpressionStatement {
-    expression: Expression
+    expression: Expression,
 }
 
 impl ExpressionStatement {
     pub fn new(expression: Expression) -> Statement {
-        Statement::new(StatementKind::Expression(ExpressionStatement{expression}))
+        Statement::new(StatementKind::Expression(ExpressionStatement {
+            expression,
+        }))
     }
 
     pub fn expression(&self) -> &Expression {
@@ -278,10 +309,7 @@ pub struct LetStatement {
 
 impl LetStatement {
     pub fn new(token: Token, name: Identifier) -> Statement {
-        Statement::new(StatementKind::Let(LetStatement{
-            token,
-            name,
-        }))
+        Statement::new(StatementKind::Let(LetStatement { token, name }))
     }
 
     pub fn name(&self) -> &Identifier {
@@ -303,20 +331,14 @@ impl Display for LetStatement {
     }
 }
 
-
 #[derive(Debug)]
 pub struct ReturnStatement {
-    token: Token
-    //value: Expression
+    token: Token, //value: Expression
 }
 
 impl ReturnStatement {
     pub fn new(token: Token) -> Statement {
-        Statement::new(StatementKind::Return(
-            ReturnStatement{
-                token
-            }
-        ))
+        Statement::new(StatementKind::Return(ReturnStatement { token }))
     }
 
     pub fn token(&self) -> &Token {
@@ -333,7 +355,7 @@ impl Display for ReturnStatement {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     #[should_panic]
     fn panics_constructing_an_identifier_with_a_non_ident_token() {
@@ -345,4 +367,3 @@ mod tests {
         Identifier::new(Token::new(0, 0, Kind::Ident("abc".to_string())));
     }
 }
-
