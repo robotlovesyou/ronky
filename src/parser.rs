@@ -190,15 +190,15 @@ impl Parser {
     }
 
     fn register_prefix_fn<F>(&mut self, tag: Tag, f: F)
-    where
-        F: 'static + Fn(&mut Parser, Token) -> Result<Expression>,
+        where
+            F: 'static + Fn(&mut Parser, Token) -> Result<Expression>,
     {
         self.prefix_parse_fns.insert(tag, Rc::new(f));
     }
 
     fn register_infix_fn<F>(&mut self, tag: Tag, f: F)
-    where
-        F: 'static + Fn(&mut Parser, Expression, Token) -> Result<Expression>,
+        where
+            F: 'static + Fn(&mut Parser, Expression, Token) -> Result<Expression>,
     {
         self.infix_parse_fns.insert(tag, Rc::new(f));
     }
@@ -391,6 +391,44 @@ mod tests {
     use crate::source::*;
     use indoc::indoc;
 
+    #[derive(Debug, Copy, Clone)]
+    enum Operand {
+        Integer(i64),
+        Identifier(&'static str),
+        Boolean(bool),
+    }
+
+    fn test_integer_literal(integer_literal: &IntegerLiteralExpression, expected: i64) {
+        assert_eq!(expected, integer_literal.value());
+        assert_eq!(format!("{}", expected), integer_literal.to_string());
+    }
+
+    fn test_identifier(identifier_expression: &IdentifierExpression, expected: &str) {
+        assert_eq!(expected, identifier_expression.to_string().as_str());
+    }
+
+    fn test_literal_expression(expression: &Expression, expected: Operand) {
+        match (expression.kind(), expected) {
+            (ExpressionKind::IntegerLiteral(integer), Operand::Integer(expected_int)) =>
+                test_integer_literal(integer, expected_int),
+            (ExpressionKind::Identifier(identifier), Operand::Identifier(expected_ident)) =>
+                test_identifier(identifier, expected_ident),
+            (other_kind, other_operand) =>
+                panic!("non matching expression kind {:?} and operand {:?}", other_kind, other_operand),
+        }
+    }
+
+    fn test_infix_expression(expression: &Expression, left: Operand, right: Operand, operator: InfixOperator) {
+        match expression.kind() {
+            ExpressionKind::Infix(infix) => {
+                test_literal_expression(infix.left(), left);
+                test_literal_expression(infix.right(), right);
+                assert_eq!(operator, infix.operator());
+            }
+            other => panic!("got {:?} expecting an infix expression", other),
+        }
+    }
+
     fn test_let_statement(statement: &Statement, name: &str) {
         assert!(matches!(statement.kind(), StatementKind::Let(_)));
 
@@ -467,12 +505,12 @@ mod tests {
     }
 
     fn test_statement_as_expression_statement<T>(statement: &Statement, t: T)
-    where
-        T: Fn(&ExpressionKind) -> (),
+        where
+            T: Fn(&Expression) -> (),
     {
         match statement.kind() {
             StatementKind::Expression(expression_statement) => {
-                t(expression_statement.expression().kind())
+                t(expression_statement.expression())
             }
             other => panic!("got {} when expecting an ExpressionStatement", other),
         }
@@ -487,19 +525,17 @@ mod tests {
         assert_eq!(1, program.statements().len());
         test_statement_as_expression_statement(
             program.statements().first().unwrap(),
-            |ek| match ek {
-                ExpressionKind::Identifier(identifier) => {
-                    assert_eq!("foobar", identifier.to_string())
-                }
-                other => panic!("got {:?} expecting an identifier expression", other),
-            },
+            |ex| test_literal_expression(ex, Operand::Identifier("foobar")),
         );
-        Ok(())
-    }
 
-    fn test_integer_literal(integer_literal: &IntegerLiteralExpression, expected: i64) {
-        assert_eq!(expected, integer_literal.value());
-        assert_eq!(format!("{}", expected), integer_literal.to_string());
+        //     match ek {
+        //     ExpressionKind::Identifier(identifier) => {
+        //         assert_eq!("foobar", identifier.to_string())
+        //     }
+        //     other => panic!("got {:?} expecting an identifier expression", other),
+        // },
+
+        Ok(())
     }
 
     #[test]
@@ -511,12 +547,7 @@ mod tests {
         assert_eq!(1, program.statements().len());
         test_statement_as_expression_statement(
             program.statements().first().unwrap(),
-            |ek| match ek {
-                ExpressionKind::IntegerLiteral(integer) => {
-                    test_integer_literal(integer, 5);
-                }
-                other => panic!("got {:?} expecting an integer expression", other),
-            },
+            |ex| test_literal_expression(ex, Operand::Integer(5)),
         );
         Ok(())
     }
@@ -533,16 +564,11 @@ mod tests {
             let program = parser.parse()?;
 
             assert_eq!(1, program.statements().len());
-            test_statement_as_expression_statement(program.statements().first().unwrap(), |ek| {
-                match ek {
+            test_statement_as_expression_statement(program.statements().first().unwrap(), |ex| {
+                match ex.kind() {
                     ExpressionKind::Prefix(prefix) => {
                         assert_eq!(operator, prefix.operator());
-                        match prefix.right().as_ref().kind() {
-                            ExpressionKind::IntegerLiteral(integer) => {
-                                test_integer_literal(integer, value);
-                            }
-                            other => panic!("got {:?} expecting an integer literal"),
-                        }
+                        test_literal_expression(prefix.right().as_ref(), Operand::Integer(value));
                     }
                     other => panic!("got {:?} expecting a prefix expression"),
                 }
@@ -552,41 +578,60 @@ mod tests {
     }
 
     #[test]
-    fn can_parse_infix_expressions() -> Result<()> {
-        use super::ExpressionKind::*;
-        use super::InfixOperator::*;
-        let infix_tests = vec![
-            ("5 + 5;", 5u64, Add, 5u64),
-            ("5 - 5;", 5, Subtract, 5),
-            ("5 * 5;", 5, Multiply, 5),
-            ("5 / 5;", 5, Divide, 5),
-            ("5 > 5;", 5, GreaterThan, 5),
-            ("5 < 5;", 5, LessThan, 5),
-            ("5 == 5;", 5, Equals, 5),
-            ("5 != 5;", 5, NotEquals, 5),
+    fn can_correctly_determine_operator_precedence() -> Result<()> {
+        let precedence_tests = vec![
+            ("-a * b", "((-a) * b)"),
+            ("!-a", "(!(-a))"),
+            ("a + b + c", "((a + b) + c)"),
+            ("a + b - c", "((a + b) - c)"),
+            ("a * b * c", "((a * b) * c)"),
+            ("a * b / c", "((a * b) / c)"),
+            ("a + b / c", "(a + (b / c))"),
+            ("a + b * c + d / e - f", "(((a + (b * c)) + (d / e)) - f)"),
+            ("3 + 4; -5 * 5", "(3 + 4)\n((-5) * 5)"),
+            ("5 > 4 == 3 < 4", "((5 > 4) == (3 < 4))"),
+            ("5 < 4 != 3 > 4", "((5 < 4) != (3 > 4))"),
+            ("3 + 4 * 5 == 3 * 1 + 4 * 5", "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))")
         ];
 
-        let match_int_lit = |ek: &ExpressionKind, expected: i64, lr: &str| match ek {
-            IntegerLiteral(integer) => {
-                assert_eq!(expected, integer.value(), "{} does not match", lr)
-            }
-            other => panic!("got {:?} expecting an IntegerLiteral"),
-        };
+        for (source, expected_output) in precedence_tests {
+            let mut parser = parser_from_source(source);
+            let program = parser.parse()?;
+            assert_eq!(program.to_string(), expected_output);
+        }
+        Ok(())
+    }
 
-        for (source, left, operator, right) in infix_tests {
+    #[test]
+    fn can_parse_infix_expressions() -> Result<()> {
+        let infix_expressions = vec![
+            ("5 + 5;", Operand::Integer(5), InfixOperator::Add, Operand::Integer(5)),
+            ("5 - 5;", Operand::Integer(5), InfixOperator::Subtract, Operand::Integer(5)),
+            ("5 * 5;", Operand::Integer(5), InfixOperator::Multiply, Operand::Integer(5)),
+            ("5 / 5;", Operand::Integer(5), InfixOperator::Divide, Operand::Integer(5)),
+            ("5 > 5;", Operand::Integer(5), InfixOperator::GreaterThan, Operand::Integer(5)),
+            ("5 < 5;", Operand::Integer(5), InfixOperator::LessThan, Operand::Integer(5)),
+            ("5 == 5;", Operand::Integer(5), InfixOperator::Equals, Operand::Integer(5)),
+            ("5 != 5;", Operand::Integer(5), InfixOperator::NotEquals, Operand::Integer(5)),
+            ("foobar + barfoo;", Operand::Identifier("foobar"), InfixOperator::Add, Operand::Identifier("barfoo")),
+            ("foobar - barfoo;", Operand::Identifier("foobar"), InfixOperator::Subtract, Operand::Identifier("barfoo")),
+            ("foobar * barfoo;", Operand::Identifier("foobar"), InfixOperator::Multiply, Operand::Identifier("barfoo")),
+            ("foobar / barfoo;", Operand::Identifier("foobar"), InfixOperator::Divide, Operand::Identifier("barfoo")),
+            ("foobar > barfoo;", Operand::Identifier("foobar"), InfixOperator::GreaterThan, Operand::Identifier("barfoo")),
+            ("foobar < barfoo;", Operand::Identifier("foobar"), InfixOperator::LessThan, Operand::Identifier("barfoo")),
+            ("foobar == barfoo;", Operand::Identifier("foobar"), InfixOperator::Equals, Operand::Identifier("barfoo")),
+            ("foobar != barfoo;", Operand::Identifier("foobar"), InfixOperator::NotEquals, Operand::Identifier("barfoo")),
+        ];
+
+        for (source, left, operator, right) in infix_expressions {
             let mut parser = parser_from_source(source);
             let program = parser.parse()?;
 
             assert_eq!(1, program.statements().len());
-            test_statement_as_expression_statement(program.statements().first().unwrap(), |ek| {
-                match ek {
-                    Infix(infix) => {
-                        match_int_lit(infix.left().kind(), 5, "left");
-                        match_int_lit(infix.right().kind(), 5, "right");
-                    }
-                    other => panic!("got {:?} expecting an infix expression", other),
-                }
-            });
+            test_statement_as_expression_statement(
+                program.statements().first().unwrap(),
+                |ex| test_infix_expression(ex, left, right, operator)
+            );
         }
         Ok(())
     }

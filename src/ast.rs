@@ -51,6 +51,7 @@ trait Node: Display {
     fn token_literal(&self) -> String;
 }
 
+#[derive(Debug)]
 pub struct Program {
     statements: Vec<Statement>,
 }
@@ -85,6 +86,7 @@ impl Node for Program {
     }
 }
 
+#[derive(Debug)]
 pub struct Statement {
     kind: StatementKind,
 }
@@ -104,7 +106,7 @@ impl Statement {
 
 impl Display for Statement {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {}", self.token(), self.kind)
+        write!(f, "{}", self.kind)
     }
 }
 
@@ -164,7 +166,7 @@ impl Expression {
 
 impl Display for Expression {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        unimplemented!()
+        self.kind.fmt(f)
     }
 }
 
@@ -230,12 +232,6 @@ impl Display for ExpressionKind {
             Prefix(kind) => kind.fmt(f),
             Infix(kind) => kind.fmt(f),
         }
-    }
-}
-
-impl Display for InfixExpression {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "({} {} {})", self.left, self.operator, self.right)
     }
 }
 
@@ -359,6 +355,12 @@ impl InfixExpression {
     }
 }
 
+impl Display for InfixExpression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "({} {} {})", self.left, self.operator, self.right)
+    }
+}
+
 #[derive(Debug)]
 pub struct ExpressionStatement {
     expression: Expression,
@@ -382,7 +384,7 @@ impl ExpressionStatement {
 
 impl Display for ExpressionStatement {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "//expression goes here")
+        self.expression.fmt(f)
     }
 }
 
