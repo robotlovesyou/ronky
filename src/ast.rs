@@ -87,13 +87,45 @@ impl Node for Program {
 }
 
 #[derive(Debug)]
+pub struct BlockStatement {
+    token: Token,
+    statements: Vec<Statement>,
+}
+
+impl BlockStatement {
+    pub fn new(token: Token, statements: Vec<Statement>) -> Statement {
+        Statement::new(StatementKind::Block(BlockStatement { token, statements }))
+    }
+
+    pub fn token(&self) -> &Token {
+        &self.token
+    }
+
+    pub fn statements(&self) -> &[Statement] {
+        &self.statements
+    }
+}
+
+impl Display for BlockStatement {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut buffer = Vec::new();
+        for stmt in self.statements.iter() {
+            buffer.push(format!("\t{}", stmt));
+        }
+        write!(f, "{{\n{}\n}}", buffer.join("\n"))
+    }
+}
+
+#[derive(Debug)]
 pub struct Statement {
-    kind: StatementKind,
+    kind: Box<StatementKind>,
 }
 
 impl Statement {
     pub fn new(kind: StatementKind) -> Statement {
-        Statement { kind }
+        Statement {
+            kind: Box::new(kind),
+        }
     }
     pub fn token(&self) -> &Token {
         &self.kind.token()
@@ -121,6 +153,7 @@ pub enum StatementKind {
     Let(LetStatement),
     Return(ReturnStatement),
     Expression(ExpressionStatement),
+    Block(BlockStatement),
 }
 
 impl StatementKind {
@@ -130,6 +163,7 @@ impl StatementKind {
             Let(let_statement) => let_statement.token(),
             Return(return_statement) => return_statement.token(),
             Expression(expression_statement) => expression_statement.token(),
+            Block(block_statement) => block_statement.token(),
         }
     }
 }
@@ -138,9 +172,10 @@ impl Display for StatementKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         use self::StatementKind::*;
         match self {
-            Let(ref let_statement) => let_statement.fmt(f),
-            Return(ref return_statement) => return_statement.fmt(f),
-            Expression(ref expression_statement) => expression_statement.fmt(f),
+            Let(let_statement) => let_statement.fmt(f),
+            Return(return_statement) => return_statement.fmt(f),
+            Expression(expression_statement) => expression_statement.fmt(f),
+            Block(block_statement) => block_statement.fmt(f),
         }
     }
 }
@@ -205,10 +240,12 @@ impl Display for Identifier {
 
 #[derive(Debug)]
 pub enum ExpressionKind {
+    Boolean(BooleanExpression),
     Identifier(IdentifierExpression),
     IntegerLiteral(IntegerLiteralExpression),
     Prefix(PrefixExpression),
     Infix(InfixExpression),
+    If(IfExpression),
 }
 
 impl ExpressionKind {
@@ -219,6 +256,8 @@ impl ExpressionKind {
             IntegerLiteral(integer_literal) => integer_literal.token(),
             Prefix(prefix_expression) => prefix_expression.token(),
             Infix(infix_expression) => infix_expression.token(),
+            Boolean(boolean_expression) => boolean_expression.token(),
+            If(if_expression) => if_expression.token(),
         }
     }
 }
@@ -231,7 +270,66 @@ impl Display for ExpressionKind {
             IntegerLiteral(kind) => kind.fmt(f),
             Prefix(kind) => kind.fmt(f),
             Infix(kind) => kind.fmt(f),
+            Boolean(kind) => kind.fmt(f),
+            If(kind) => kind.fmt(f),
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct IfExpression {
+    token: Token,
+    condition: Box<Expression>,
+    consequence: Statement,
+    alternative: Option<Statement>,
+}
+
+impl IfExpression {
+    pub fn new(
+        token: Token,
+        condition: Expression,
+        consequence: Statement,
+        alternative: Option<Statement>,
+    ) -> Expression {
+        Expression::new(ExpressionKind::If(IfExpression {
+            token,
+            condition: Box::new(condition),
+            consequence,
+            alternative,
+        }))
+    }
+
+    pub fn token(&self) -> &Token {
+        &self.token
+    }
+
+    pub fn condition(&self) -> &Box<Expression> {
+        &self.condition
+    }
+
+    pub fn consequence(&self) -> &Statement {
+        &self.consequence
+    }
+
+    pub fn alternative(&self) -> &Option<Statement> {
+        &self.alternative
+    }
+}
+
+impl Display for IfExpression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} ({}) {})",
+            self.token, self.condition, self.consequence
+        )
+        .and_then(|r| {
+            if let Some(ref alt) = self.alternative {
+                write!(f, "else {}", alt)
+            } else {
+                Ok(r)
+            }
+        })
     }
 }
 
@@ -284,6 +382,31 @@ impl IntegerLiteralExpression {
 impl Display for IntegerLiteralExpression {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.value)
+    }
+}
+
+#[derive(Debug)]
+pub struct BooleanExpression {
+    token: Token,
+}
+
+impl BooleanExpression {
+    pub fn new(token: Token) -> Expression {
+        Expression::new(ExpressionKind::Boolean(BooleanExpression { token }))
+    }
+
+    pub fn token(&self) -> &Token {
+        &self.token
+    }
+
+    pub fn value(&self) -> bool {
+        matches!(self.token.kind, Kind::True)
+    }
+}
+
+impl Display for BooleanExpression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.token().fmt(f)
     }
 }
 

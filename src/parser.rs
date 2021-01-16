@@ -10,6 +10,8 @@ use std::result;
 const PARSING_A_LET_STATEMENT: &'static str = "parsing a let statement";
 const PARSING_A_PROGRAM: &'static str = "parsing a program";
 const PARSING_A_PREFIX_EXPRESSION: &'static str = "parsing a prefix expression";
+const PARSING_A_GROUPED_EXPRESSION: &'static str = "parsing a grouped expression";
+const PARSING_AN_IF_EXPRESSION: &'static str = "parsing an if expression";
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
 enum Precedence {
@@ -71,9 +73,39 @@ impl StatementError {
 }
 
 #[derive(Debug)]
+pub struct ExpressionError {
+    message: String,
+}
+
+impl ExpressionError {
+    pub fn no_prefix_parse_fn(token: &Token) -> Error {
+        Error {
+            kind: ErrorKind::Expression(ExpressionError {
+                message: format!(
+                    "no prefix parse fn for {} at line {} column {}",
+                    token, token.line, token.column
+                ),
+            }),
+        }
+    }
+
+    pub fn no_infix_parse_fn(token: &Token) -> Error {
+        Error {
+            kind: ErrorKind::Expression(ExpressionError {
+                message: format!(
+                    "no infix parse fn for {} at line {} column {}",
+                    token, token.line, token.column
+                ),
+            }),
+        }
+    }
+}
+
+#[derive(Debug)]
 enum ErrorKind {
     Parse(ParseError),
     Statement(StatementError),
+    Expression(ExpressionError),
 }
 
 #[derive(Debug)]
@@ -128,6 +160,22 @@ impl Parser {
 
         parser.register_prefix_fn(Tag::Bang, |parser: &mut Parser, token: Token| {
             parser.parse_prefix_expression(token)
+        });
+
+        parser.register_prefix_fn(Tag::True, |parser: &mut Parser, token: Token| {
+            parser.parse_boolean_literal_expression(token)
+        });
+
+        parser.register_prefix_fn(Tag::False, |parser: &mut Parser, token: Token| {
+            parser.parse_boolean_literal_expression(token)
+        });
+
+        parser.register_prefix_fn(Tag::LParen, |parser: &mut Parser, token: Token| {
+            parser.parse_grouped_expression(token)
+        });
+
+        parser.register_prefix_fn(Tag::If, |parser: &mut Parser, token: Token| {
+            parser.parse_if_expression(token)
         });
 
         parser.register_infix_fn(
@@ -190,15 +238,15 @@ impl Parser {
     }
 
     fn register_prefix_fn<F>(&mut self, tag: Tag, f: F)
-        where
-            F: 'static + Fn(&mut Parser, Token) -> Result<Expression>,
+    where
+        F: 'static + Fn(&mut Parser, Token) -> Result<Expression>,
     {
         self.prefix_parse_fns.insert(tag, Rc::new(f));
     }
 
     fn register_infix_fn<F>(&mut self, tag: Tag, f: F)
-        where
-            F: 'static + Fn(&mut Parser, Expression, Token) -> Result<Expression>,
+    where
+        F: 'static + Fn(&mut Parser, Expression, Token) -> Result<Expression>,
     {
         self.infix_parse_fns.insert(tag, Rc::new(f));
     }
@@ -208,11 +256,7 @@ impl Parser {
         let mut errors: Vec<Error> = Vec::new();
 
         while let Some(token) = self.lexer.next() {
-            let next_statement: Result<Statement> = match token.kind {
-                Kind::Let => self.parse_let_statement(token),
-                Kind::Return => self.parse_return_statement(token),
-                _ => self.parse_expression_statement(token),
-            };
+            let next_statement: Result<Statement> = self.parse_statement(token);
 
             if let Ok(statement) = next_statement {
                 statements.push(statement);
@@ -231,7 +275,8 @@ impl Parser {
     fn parse_statement(&mut self, token: Token) -> Result<Statement> {
         match token.kind {
             Kind::Let => self.parse_let_statement(token),
-            other => unimplemented!(),
+            Kind::Return => self.parse_return_statement(token),
+            _ => self.parse_expression_statement(token),
         }
     }
 
@@ -244,13 +289,30 @@ impl Parser {
             })
     }
 
+    fn get_prefix_parse_fn(
+        &mut self,
+        token: &Token,
+    ) -> Result<Rc<dyn Fn(&mut Parser, Token) -> Result<Expression>>> {
+        if let Some(f) = self.prefix_parse_fns.get(&token.kind.tag()) {
+            Ok(f.clone())
+        } else {
+            Err(ExpressionError::no_prefix_parse_fn(token))
+        }
+    }
+
+    fn get_infix_parse_fn(
+        &mut self,
+        token: &Token,
+    ) -> Result<Rc<dyn Fn(&mut Parser, Expression, Token) -> Result<Expression>>> {
+        if let Some(f) = self.infix_parse_fns.get(&token.kind.tag()) {
+            Ok(f.clone())
+        } else {
+            Err(ExpressionError::no_infix_parse_fn(token))
+        }
+    }
+
     fn parse_expression(&mut self, token: Token, precedence: Precedence) -> Result<Expression> {
-        let prefix_f = self
-            .prefix_parse_fns
-            .get(&token.kind.tag())
-            //TODO don't panic here, raise an error
-            .expect("no prefix parse fn")
-            .clone();
+        let prefix_f = self.get_prefix_parse_fn(&token)?;
 
         let mut left = prefix_f(self, token)?;
         while let Some(peek) = self.lexer.peek() {
@@ -258,12 +320,7 @@ impl Parser {
                 break;
             }
             let next_token = self.lexer.next().expect("no token");
-            let infix_f = self
-                .infix_parse_fns
-                .get(&next_token.kind.tag())
-                //TODO don't panic here, raise an error
-                .expect("no infix parse fn")
-                .clone();
+            let infix_f = self.get_infix_parse_fn(&next_token)?;
 
             left = infix_f(self, left, next_token)?;
         }
@@ -284,6 +341,10 @@ impl Parser {
         };
 
         Ok(IntegerLiteralExpression::new(token, value))
+    }
+
+    fn parse_boolean_literal_expression(&mut self, token: Token) -> Result<Expression> {
+        Ok(BooleanExpression::new(token))
     }
 
     fn parse_prefix_expression(&mut self, token: Token) -> Result<Expression> {
@@ -318,6 +379,52 @@ impl Parser {
         let next_token = self.expect_next()?;
         let right = self.parse_expression(next_token, operator_precedence(&token))?;
         Ok(InfixExpression::new(left, right, operator))
+    }
+
+    fn parse_grouped_expression(&mut self, token: Token) -> Result<Expression> {
+        let next_token = self.expect_next()?;
+        self.parse_expression(next_token, Precedence::Lowest)
+            .and_then(|ex| {
+                self.expect_peek_consume(Tag::RParen, PARSING_A_GROUPED_EXPRESSION)
+                    .map(|_| ex)
+            })
+    }
+
+    fn parse_if_expression(&mut self, token: Token) -> Result<Expression> {
+        self.expect_peek_consume(Tag::LParen, PARSING_AN_IF_EXPRESSION)?;
+
+        let mut next_token = self.expect_next()?;
+        let condition = self.parse_expression(next_token, Precedence::Lowest)?;
+
+        self.expect_peek_consume(Tag::RParen, PARSING_AN_IF_EXPRESSION)?;
+        let mut next_token = self.expect_peek_consume(Tag::LBrace, PARSING_AN_IF_EXPRESSION)?;
+        let consequence = self.parse_block_statement(next_token)?;
+
+        let alternative = if let Some(_) = self.optional_peek_consume(Tag::Else) {
+            let mut next_token = self.expect_peek_consume(Tag::LBrace, PARSING_AN_IF_EXPRESSION)?;
+            Some(self.parse_block_statement(next_token)?)
+        } else {
+            None
+        };
+
+        Ok(IfExpression::new(
+            token,
+            condition,
+            consequence,
+            alternative,
+        ))
+    }
+
+    fn parse_block_statement(&mut self, token: Token) -> Result<Statement> {
+        let mut statements = Vec::new();
+
+        while let Some(next_token) = self.lexer.next() {
+            if next_token.kind.tag() == Tag::RBrace {
+                break;
+            }
+            statements.push(self.parse_statement(next_token)?);
+        }
+        Ok(BlockStatement::new(token, statements))
     }
 
     fn consume_source_line(&mut self) {
@@ -368,7 +475,8 @@ impl Parser {
     }
 
     fn optional_peek_consume(&mut self, tag: Tag) -> Option<Token> {
-        match self.lexer.peek() {
+        let peeked = self.lexer.peek();
+        match peeked {
             Some(token) if token.kind.tag() == tag => Some(self.lexer.next().expect("no token")),
             _ => None,
         }
@@ -407,18 +515,34 @@ mod tests {
         assert_eq!(expected, identifier_expression.to_string().as_str());
     }
 
+    fn test_boolean_literal(boolean_expression: &BooleanExpression, expected: bool) {
+        assert_eq!(boolean_expression.value(), expected);
+    }
+
     fn test_literal_expression(expression: &Expression, expected: Operand) {
         match (expression.kind(), expected) {
-            (ExpressionKind::IntegerLiteral(integer), Operand::Integer(expected_int)) =>
-                test_integer_literal(integer, expected_int),
-            (ExpressionKind::Identifier(identifier), Operand::Identifier(expected_ident)) =>
-                test_identifier(identifier, expected_ident),
-            (other_kind, other_operand) =>
-                panic!("non matching expression kind {:?} and operand {:?}", other_kind, other_operand),
+            (ExpressionKind::IntegerLiteral(integer), Operand::Integer(expected_int)) => {
+                test_integer_literal(integer, expected_int)
+            }
+            (ExpressionKind::Identifier(identifier), Operand::Identifier(expected_ident)) => {
+                test_identifier(identifier, expected_ident)
+            }
+            (ExpressionKind::Boolean(boolean), Operand::Boolean(b)) => {
+                test_boolean_literal(boolean, b)
+            }
+            (other_kind, other_operand) => panic!(
+                "non matching expression kind {:?} and operand {:?}",
+                other_kind, other_operand
+            ),
         }
     }
 
-    fn test_infix_expression(expression: &Expression, left: Operand, right: Operand, operator: InfixOperator) {
+    fn test_infix_expression(
+        expression: &Expression,
+        left: Operand,
+        right: Operand,
+        operator: InfixOperator,
+    ) {
         match expression.kind() {
             ExpressionKind::Infix(infix) => {
                 test_literal_expression(infix.left(), left);
@@ -437,6 +561,13 @@ mod tests {
                 assert_eq!(name, let_statement.name().name())
             }
             other => panic!("got a {:?} expecting a let statement", other),
+        }
+    }
+
+    fn test_block_statement<T: Fn(&BlockStatement) -> ()>(statement: &Statement, t: T) {
+        match statement.kind() {
+            StatementKind::Block(block_statement) => t(block_statement),
+            other => panic!("got {:?} expecting a block statement", other),
         }
     }
 
@@ -505,13 +636,11 @@ mod tests {
     }
 
     fn test_statement_as_expression_statement<T>(statement: &Statement, t: T)
-        where
-            T: Fn(&Expression) -> (),
+    where
+        T: Fn(&Expression) -> (),
     {
         match statement.kind() {
-            StatementKind::Expression(expression_statement) => {
-                t(expression_statement.expression())
-            }
+            StatementKind::Expression(expression_statement) => t(expression_statement.expression()),
             other => panic!("got {} when expecting an ExpressionStatement", other),
         }
     }
@@ -523,18 +652,9 @@ mod tests {
         let mut parser = parser_from_source(source);
         let program = parser.parse()?;
         assert_eq!(1, program.statements().len());
-        test_statement_as_expression_statement(
-            program.statements().first().unwrap(),
-            |ex| test_literal_expression(ex, Operand::Identifier("foobar")),
-        );
-
-        //     match ek {
-        //     ExpressionKind::Identifier(identifier) => {
-        //         assert_eq!("foobar", identifier.to_string())
-        //     }
-        //     other => panic!("got {:?} expecting an identifier expression", other),
-        // },
-
+        test_statement_as_expression_statement(program.statements().first().unwrap(), |ex| {
+            test_literal_expression(ex, Operand::Identifier("foobar"))
+        });
         Ok(())
     }
 
@@ -545,18 +665,19 @@ mod tests {
         let mut parser = parser_from_source(source);
         let program = parser.parse()?;
         assert_eq!(1, program.statements().len());
-        test_statement_as_expression_statement(
-            program.statements().first().unwrap(),
-            |ex| test_literal_expression(ex, Operand::Integer(5)),
-        );
+        test_statement_as_expression_statement(program.statements().first().unwrap(), |ex| {
+            test_literal_expression(ex, Operand::Integer(5))
+        });
         Ok(())
     }
 
     #[test]
     fn can_parse_prefix_expressions() -> Result<()> {
         let prefix_tests = vec![
-            ("!5", PrefixOperator::Not, 5),
-            ("-15", PrefixOperator::Minus, 15),
+            ("!5", PrefixOperator::Not, Operand::Integer(5)),
+            ("-15", PrefixOperator::Minus, Operand::Integer(15)),
+            ("!true;", PrefixOperator::Not, Operand::Boolean(true)),
+            ("!false;", PrefixOperator::Not, Operand::Boolean(false)),
         ];
 
         for (source, operator, value) in prefix_tests {
@@ -568,7 +689,7 @@ mod tests {
                 match ex.kind() {
                     ExpressionKind::Prefix(prefix) => {
                         assert_eq!(operator, prefix.operator());
-                        test_literal_expression(prefix.right().as_ref(), Operand::Integer(value));
+                        test_literal_expression(prefix.right().as_ref(), value);
                     }
                     other => panic!("got {:?} expecting a prefix expression"),
                 }
@@ -591,7 +712,19 @@ mod tests {
             ("3 + 4; -5 * 5", "(3 + 4)\n((-5) * 5)"),
             ("5 > 4 == 3 < 4", "((5 > 4) == (3 < 4))"),
             ("5 < 4 != 3 > 4", "((5 < 4) != (3 > 4))"),
-            ("3 + 4 * 5 == 3 * 1 + 4 * 5", "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))")
+            (
+                "3 + 4 * 5 == 3 * 1 + 4 * 5",
+                "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))",
+            ),
+            ("true", "true"),
+            ("false", "false"),
+            ("3 > 5 == false", "((3 > 5) == false)"),
+            ("1 + (2 + 3) + 4", "((1 + (2 + 3)) + 4)"),
+            ("(5 + 5) * 2", "((5 + 5) * 2)"),
+            ("2 / (5 + 5)", "(2 / (5 + 5))"),
+            ("(5 + 5) * 2 * (5 + 5)", "(((5 + 5) * 2) * (5 + 5))"),
+            ("-(5 + 5)", "(-(5 + 5))"),
+            ("!(true == true)", "(!(true == true))"),
         ];
 
         for (source, expected_output) in precedence_tests {
@@ -605,22 +738,120 @@ mod tests {
     #[test]
     fn can_parse_infix_expressions() -> Result<()> {
         let infix_expressions = vec![
-            ("5 + 5;", Operand::Integer(5), InfixOperator::Add, Operand::Integer(5)),
-            ("5 - 5;", Operand::Integer(5), InfixOperator::Subtract, Operand::Integer(5)),
-            ("5 * 5;", Operand::Integer(5), InfixOperator::Multiply, Operand::Integer(5)),
-            ("5 / 5;", Operand::Integer(5), InfixOperator::Divide, Operand::Integer(5)),
-            ("5 > 5;", Operand::Integer(5), InfixOperator::GreaterThan, Operand::Integer(5)),
-            ("5 < 5;", Operand::Integer(5), InfixOperator::LessThan, Operand::Integer(5)),
-            ("5 == 5;", Operand::Integer(5), InfixOperator::Equals, Operand::Integer(5)),
-            ("5 != 5;", Operand::Integer(5), InfixOperator::NotEquals, Operand::Integer(5)),
-            ("foobar + barfoo;", Operand::Identifier("foobar"), InfixOperator::Add, Operand::Identifier("barfoo")),
-            ("foobar - barfoo;", Operand::Identifier("foobar"), InfixOperator::Subtract, Operand::Identifier("barfoo")),
-            ("foobar * barfoo;", Operand::Identifier("foobar"), InfixOperator::Multiply, Operand::Identifier("barfoo")),
-            ("foobar / barfoo;", Operand::Identifier("foobar"), InfixOperator::Divide, Operand::Identifier("barfoo")),
-            ("foobar > barfoo;", Operand::Identifier("foobar"), InfixOperator::GreaterThan, Operand::Identifier("barfoo")),
-            ("foobar < barfoo;", Operand::Identifier("foobar"), InfixOperator::LessThan, Operand::Identifier("barfoo")),
-            ("foobar == barfoo;", Operand::Identifier("foobar"), InfixOperator::Equals, Operand::Identifier("barfoo")),
-            ("foobar != barfoo;", Operand::Identifier("foobar"), InfixOperator::NotEquals, Operand::Identifier("barfoo")),
+            (
+                "5 + 5;",
+                Operand::Integer(5),
+                InfixOperator::Add,
+                Operand::Integer(5),
+            ),
+            (
+                "5 - 5;",
+                Operand::Integer(5),
+                InfixOperator::Subtract,
+                Operand::Integer(5),
+            ),
+            (
+                "5 * 5;",
+                Operand::Integer(5),
+                InfixOperator::Multiply,
+                Operand::Integer(5),
+            ),
+            (
+                "5 / 5;",
+                Operand::Integer(5),
+                InfixOperator::Divide,
+                Operand::Integer(5),
+            ),
+            (
+                "5 > 5;",
+                Operand::Integer(5),
+                InfixOperator::GreaterThan,
+                Operand::Integer(5),
+            ),
+            (
+                "5 < 5;",
+                Operand::Integer(5),
+                InfixOperator::LessThan,
+                Operand::Integer(5),
+            ),
+            (
+                "5 == 5;",
+                Operand::Integer(5),
+                InfixOperator::Equals,
+                Operand::Integer(5),
+            ),
+            (
+                "5 != 5;",
+                Operand::Integer(5),
+                InfixOperator::NotEquals,
+                Operand::Integer(5),
+            ),
+            (
+                "foobar + barfoo;",
+                Operand::Identifier("foobar"),
+                InfixOperator::Add,
+                Operand::Identifier("barfoo"),
+            ),
+            (
+                "foobar - barfoo;",
+                Operand::Identifier("foobar"),
+                InfixOperator::Subtract,
+                Operand::Identifier("barfoo"),
+            ),
+            (
+                "foobar * barfoo;",
+                Operand::Identifier("foobar"),
+                InfixOperator::Multiply,
+                Operand::Identifier("barfoo"),
+            ),
+            (
+                "foobar / barfoo;",
+                Operand::Identifier("foobar"),
+                InfixOperator::Divide,
+                Operand::Identifier("barfoo"),
+            ),
+            (
+                "foobar > barfoo;",
+                Operand::Identifier("foobar"),
+                InfixOperator::GreaterThan,
+                Operand::Identifier("barfoo"),
+            ),
+            (
+                "foobar < barfoo;",
+                Operand::Identifier("foobar"),
+                InfixOperator::LessThan,
+                Operand::Identifier("barfoo"),
+            ),
+            (
+                "foobar == barfoo;",
+                Operand::Identifier("foobar"),
+                InfixOperator::Equals,
+                Operand::Identifier("barfoo"),
+            ),
+            (
+                "foobar != barfoo;",
+                Operand::Identifier("foobar"),
+                InfixOperator::NotEquals,
+                Operand::Identifier("barfoo"),
+            ),
+            (
+                "true == true",
+                Operand::Boolean(true),
+                InfixOperator::Equals,
+                Operand::Boolean(true),
+            ),
+            (
+                "true != false",
+                Operand::Boolean(true),
+                InfixOperator::NotEquals,
+                Operand::Boolean(false),
+            ),
+            (
+                "false == false",
+                Operand::Boolean(false),
+                InfixOperator::Equals,
+                Operand::Boolean(false),
+            ),
         ];
 
         for (source, left, operator, right) in infix_expressions {
@@ -628,11 +859,100 @@ mod tests {
             let program = parser.parse()?;
 
             assert_eq!(1, program.statements().len());
-            test_statement_as_expression_statement(
-                program.statements().first().unwrap(),
-                |ex| test_infix_expression(ex, left, right, operator)
-            );
+            test_statement_as_expression_statement(program.statements().first().unwrap(), |ex| {
+                test_infix_expression(ex, left, right, operator)
+            });
         }
+        Ok(())
+    }
+
+    #[test]
+    fn can_parse_boolean_expressions() -> Result<()> {
+        let tests = vec![("true;", true), ("false;", false)];
+
+        for (source, value) in tests {
+            let mut parser = parser_from_source(source);
+            let program = parser.parse()?;
+
+            assert_eq!(1, program.statements().len());
+            test_statement_as_expression_statement(program.statements().first().unwrap(), |ex| {
+                test_literal_expression(ex, Operand::Boolean(value))
+            });
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn can_parse_if_expressions() -> Result<()> {
+        let source = "if (x < y) {x}";
+        let mut parser = parser_from_source(source);
+        let program = parser.parse()?;
+        assert_eq!(1, program.statements().len());
+        test_statement_as_expression_statement(
+            program.statements().first().unwrap(),
+            |ex| match ex.kind() {
+                ExpressionKind::If(if_expression) => {
+                    test_infix_expression(
+                        if_expression.condition(),
+                        Operand::Identifier("x"),
+                        Operand::Identifier("y"),
+                        InfixOperator::LessThan,
+                    );
+                    test_block_statement(if_expression.consequence(), |block_statement| {
+                        assert_eq!(1, block_statement.statements().len());
+                        test_statement_as_expression_statement(
+                            block_statement.statements().first().unwrap(),
+                            |ex| test_literal_expression(ex, Operand::Identifier("x")),
+                        );
+                    });
+                    assert!(if_expression.alternative().is_none());
+                }
+                other => panic!("got {:?} expecting an if expression"),
+            },
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn can_parse_if_else_expressions() -> Result<()> {
+        let source = "if (a < b) {a} else {b}";
+        let mut parser = parser_from_source(source);
+        let program = parser.parse()?;
+        assert_eq!(1, program.statements().len());
+        test_statement_as_expression_statement(
+            program.statements().first().unwrap(),
+            |ex| match ex.kind() {
+                ExpressionKind::If(if_expression) => {
+                    test_infix_expression(
+                        if_expression.condition(),
+                        Operand::Identifier("a"),
+                        Operand::Identifier("b"),
+                        InfixOperator::LessThan,
+                    );
+                    test_block_statement(if_expression.consequence(), |block_statement| {
+                        assert_eq!(1, block_statement.statements().len());
+                        test_statement_as_expression_statement(
+                            block_statement.statements().first().unwrap(),
+                            |ex| test_literal_expression(ex, Operand::Identifier("a")),
+                        );
+                    });
+                    test_block_statement(
+                        if_expression
+                            .alternative()
+                            .as_ref()
+                            .expect("no alternative"),
+                        |block_statement| {
+                            assert_eq!(1, block_statement.statements().len());
+                            test_statement_as_expression_statement(
+                                block_statement.statements().first().unwrap(),
+                                |ex| test_literal_expression(ex, Operand::Identifier("b")),
+                            );
+                        },
+                    );
+                }
+                other => panic!("got {:?} expecting an if expression"),
+            },
+        );
         Ok(())
     }
 }
