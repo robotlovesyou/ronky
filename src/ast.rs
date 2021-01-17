@@ -247,6 +247,7 @@ pub enum ExpressionKind {
     Infix(InfixExpression),
     If(IfExpression),
     FunctionLiteral(FunctionLiteralExpression),
+    Call(CallExpression),
 }
 
 impl ExpressionKind {
@@ -260,6 +261,7 @@ impl ExpressionKind {
             Boolean(boolean_expression) => boolean_expression.token(),
             If(if_expression) => if_expression.token(),
             FunctionLiteral(function_literal_expression) => function_literal_expression.token(),
+            Call(call_expression) => call_expression.token(),
         }
     }
 }
@@ -275,6 +277,7 @@ impl Display for ExpressionKind {
             Boolean(kind) => kind.fmt(f),
             If(kind) => kind.fmt(f),
             FunctionLiteral(kind) => kind.fmt(f),
+            Call(kind) => kind.fmt(f),
         }
     }
 }
@@ -452,6 +455,46 @@ impl BooleanExpression {
 impl Display for BooleanExpression {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.token().fmt(f)
+    }
+}
+
+#[derive(Debug)]
+pub struct CallExpression {
+    token: Token,
+    function: Box<Expression>,
+    arguments: Vec<Box<Expression>>,
+}
+
+impl CallExpression {
+    pub fn new(token: Token, function: Expression, arguments: Vec<Expression>) -> Expression {
+        Expression::new(ExpressionKind::Call(CallExpression {
+            token,
+            function: Box::new(function),
+            arguments: arguments.into_iter().map(|a| Box::new(a)).collect(),
+        }))
+    }
+
+    pub fn token(&self) -> &Token {
+        &self.token
+    }
+
+    pub fn function(&self) -> &Box<Expression> {
+        &self.function
+    }
+
+    pub fn arguments(&self) -> &[Box<Expression>] {
+        &self.arguments
+    }
+}
+
+impl Display for CallExpression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let call_arguments = self
+            .arguments()
+            .iter()
+            .map(|a| a.to_string())
+            .collect::<Vec<String>>();
+        write!(f, "{}({})", self.function, call_arguments.join(", "))
     }
 }
 

@@ -126,6 +126,7 @@ fn operator_precedence(token: &Token) -> Precedence {
         GT => LessGreater,
         EQ => Equals,
         NotEQ => Equals,
+        LParen => Call,
         _ => Lowest,
     }
 }
@@ -227,6 +228,13 @@ impl Parser {
             Tag::NotEQ,
             |parser: &mut Parser, left: Expression, token: Token| {
                 parser.parse_infix_expression(left, token)
+            },
+        );
+
+        parser.register_infix_fn(
+            Tag::LParen,
+            |parser: &mut Parser, left: Expression, token: Token| {
+                parser.parse_call_expression(left, token)
             },
         );
 
@@ -445,19 +453,19 @@ impl Parser {
                 ));
             }
             identifiers.push(Identifier::new(next_token));
-
-            if let Some(maybe_comma) = self.lexer.peek() {
-                if maybe_comma.kind.tag() != Tag::Comma && maybe_comma.kind.tag() != Tag::RParen {
-                    return Err(StatementError::unexpected_token(
-                        "comma or right paren",
-                        maybe_comma,
-                        PARSING_A_PARAMETER_LIST,
-                    ));
-                }
-                if maybe_comma.kind.tag() == Tag::Comma {
-                    self.expect_next()?;
-                }
-            }
+            self.optional_peek_consume(Tag::Comma);
+            // if let Some(maybe_comma) = self.lexer.peek() {
+            //     if maybe_comma.kind.tag() != Tag::Comma && maybe_comma.kind.tag() != Tag::RParen {
+            //         return Err(StatementError::unexpected_token(
+            //             "comma or right paren",
+            //             maybe_comma,
+            //             PARSING_A_PARAMETER_LIST,
+            //         ));
+            //     }
+            //     if maybe_comma.kind.tag() == Tag::Comma {
+            //         self.expect_next()?;
+            //     }
+            // }
         }
 
         Ok(identifiers)
@@ -473,6 +481,24 @@ impl Parser {
             statements.push(self.parse_statement(next_token)?);
         }
         Ok(BlockStatement::new(token, statements))
+    }
+
+    fn parse_call_expression(&mut self, left: Expression, token: Token) -> Result<Expression> {
+        let arguments = self.parse_call_arguments()?;
+        Ok(CallExpression::new(token, left, arguments))
+    }
+
+    fn parse_call_arguments(&mut self) -> Result<Vec<Expression>> {
+        let mut arguments = Vec::new();
+
+        while let Some(token) = self.lexer.next() {
+            if token.kind.tag() == Tag::RParen {
+                break;
+            }
+            arguments.push(self.parse_expression(token, Precedence::Lowest)?);
+            self.optional_peek_consume(Tag::Comma);
+        }
+        Ok(arguments)
     }
 
     fn consume_source_line(&mut self) {
@@ -773,6 +799,9 @@ mod tests {
             ("(5 + 5) * 2 * (5 + 5)", "(((5 + 5) * 2) * (5 + 5))"),
             ("-(5 + 5)", "(-(5 + 5))"),
             ("!(true == true)", "(!(true == true))"),
+            ("a + add(b * c) + d", "((a + add((b * c))) + d)"),
+            ("add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))", "add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)))"),
+            ("add(a + b + c * d / f + g)", "add((((a + b) + ((c * d) / f)) + g))"),
         ];
 
         for (source, expected_output) in precedence_tests {
@@ -1067,6 +1096,41 @@ mod tests {
                 }
             })
         }
+        Ok(())
+    }
+
+    #[test]
+    fn can_parse_call_expression() -> Result<()> {
+        let source = "add(1, 2 * 3, 4 + 5);";
+        let mut parser = parser_from_source(source);
+        let program = parser.parse()?;
+        assert_eq!(1, program.statements().len());
+        test_statement_as_expression_statement(
+            program.statements().first().unwrap(),
+            |ex| match ex.kind() {
+                ExpressionKind::Call(call_expression) => {
+                    test_literal_expression(call_expression.function(), Operand::Identifier("add"));
+                    assert_eq!(3, call_expression.arguments().len());
+                    test_literal_expression(
+                        call_expression.arguments().get(0).unwrap(),
+                        Operand::Integer(1),
+                    );
+                    test_infix_expression(
+                        call_expression.arguments().get(1).unwrap(),
+                        Operand::Integer(2),
+                        Operand::Integer(3),
+                        InfixOperator::Multiply,
+                    );
+                    test_infix_expression(
+                        call_expression.arguments().get(2).unwrap(),
+                        Operand::Integer(4),
+                        Operand::Integer(5),
+                        InfixOperator::Add
+                    )
+                }
+                other => panic!("got {:?} expecting a call_expression", other),
+            },
+        );
         Ok(())
     }
 }
