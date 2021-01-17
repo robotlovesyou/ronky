@@ -15,6 +15,7 @@ const PARSING_A_GROUPED_EXPRESSION: &'static str = "parsing a grouped expression
 const PARSING_AN_IF_EXPRESSION: &'static str = "parsing an if expression";
 const PARSING_A_PARAMETER_LIST: &'static str = "parsing a parameter list";
 const PARSING_A_FUNCTION_LITERAL: &'static str = "parsing a function literal";
+const PARSING_A_RETURN_STATEMENT: &'static str = "parsing a return statement";
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
 enum Precedence {
@@ -63,13 +64,10 @@ impl StatementError {
         }
     }
 
-    fn unexpected_eof(expected: &str, action: &str) -> Error {
+    fn unexpected_eof(action: &str) -> Error {
         Error {
             kind: ErrorKind::Statement(StatementError {
-                message: format!(
-                    "reached the end of the source when expecting a {} while {}",
-                    expected, action
-                ),
+                message: format!("reached the end of the source while {}", action),
             }),
         }
     }
@@ -364,7 +362,7 @@ impl Parser {
             }
         };
 
-        let next_token = self.expect_next()?;
+        let next_token = self.expect_next(PARSING_A_PREFIX_EXPRESSION)?;
         let right = self.parse_expression(next_token, Precedence::Prefix)?;
         Ok(PrefixExpression::new(token, operator, right))
     }
@@ -390,13 +388,13 @@ impl Parser {
             }
         };
 
-        let next_token = self.expect_next()?;
+        let next_token = self.expect_next(PARSING_AN_INFIX_EXPRESSION)?;
         let right = self.parse_expression(next_token, operator_precedence(&token))?;
         Ok(InfixExpression::new(left, right, operator))
     }
 
     fn parse_grouped_expression(&mut self, token: Token) -> Result<Expression> {
-        let next_token = self.expect_next()?;
+        let next_token = self.expect_next(PARSING_A_GROUPED_EXPRESSION)?;
         self.parse_expression(next_token, Precedence::Lowest)
             .and_then(|ex| {
                 self.expect_peek_consume(Tag::RParen, PARSING_A_GROUPED_EXPRESSION)
@@ -407,7 +405,7 @@ impl Parser {
     fn parse_if_expression(&mut self, token: Token) -> Result<Expression> {
         self.expect_peek_consume(Tag::LParen, PARSING_AN_IF_EXPRESSION)?;
 
-        let mut next_token = self.expect_next()?;
+        let mut next_token = self.expect_next(PARSING_AN_IF_EXPRESSION)?;
         let condition = self.parse_expression(next_token, Precedence::Lowest)?;
 
         self.expect_peek_consume(Tag::RParen, PARSING_AN_IF_EXPRESSION)?;
@@ -509,19 +507,21 @@ impl Parser {
         }
     }
 
-    fn parse_let_statement(&mut self, token: Token) -> Result<Statement> {
-        let elements = self
-            .expect_peek_consume(Tag::Ident, PARSING_A_LET_STATEMENT)
-            .and_then(|ident_token| {
-                self.expect_peek_consume(Tag::Assign, PARSING_A_LET_STATEMENT)
-                    .map(|_| ident_token)
-            });
+    fn try_parse_let_statement(&mut self, token: Token) -> Result<Statement> {
+        let ident_token = self.expect_peek_consume(Tag::Ident, PARSING_A_LET_STATEMENT)?;
+        let identifier = Identifier::new(ident_token);
 
-        match elements {
-            Ok(ident_token) => {
-                // TODO: This should not be consuming the source line but parsing the expression into 'elements' above
-                self.consume_source_line();
-                Ok(LetStatement::new(token, Identifier::new(ident_token)))
+        self.expect_peek_consume(Tag::Assign, PARSING_A_LET_STATEMENT)?;
+        let next_token = self.expect_next(PARSING_A_LET_STATEMENT)?;
+        let value = self.parse_expression(next_token, Precedence::Lowest)?;
+        self.expect_peek_consume(Tag::Semicolon, PARSING_A_LET_STATEMENT);
+        Ok(LetStatement::new(token, identifier, value))
+    }
+
+    fn parse_let_statement(&mut self, token: Token) -> Result<Statement> {
+        match self.try_parse_let_statement(token) {
+            Ok(let_statement) => {
+                Ok(let_statement)
             }
             Err(e) => {
                 self.consume_source_line();
@@ -530,10 +530,21 @@ impl Parser {
         }
     }
 
+    fn try_parse_return_statement(&mut self, token: Token) -> Result<Statement> {
+        let next_token = self.expect_next(PARSING_A_RETURN_STATEMENT)?;
+        let value = self.parse_expression(next_token, Precedence::Lowest)?;
+        self.expect_peek_consume(Tag::Semicolon, PARSING_A_RETURN_STATEMENT)?;
+        Ok(ReturnStatement::new(token, value))
+    }
+
     fn parse_return_statement(&mut self, token: Token) -> Result<Statement> {
-        //TODO: this should not be consuming the source line but parsing the expression
-        self.consume_source_line();
-        Ok(ReturnStatement::new(token))
+        match self.try_parse_return_statement(token) {
+            Ok(return_statement) => Ok(return_statement),
+            Err(e) => {
+                self.consume_source_line();
+                Err(e)
+            }
+        }
     }
 
     fn expect_peek_consume(&mut self, tag: Tag, action: &str) -> Result<Token> {
@@ -544,7 +555,7 @@ impl Parser {
                 token,
                 action,
             )),
-            None => Err(StatementError::unexpected_eof(&tag.to_string(), action)),
+            None => Err(StatementError::unexpected_eof(action)),
         }
     }
 
@@ -556,12 +567,9 @@ impl Parser {
         }
     }
 
-    fn expect_next(&mut self) -> Result<Token> {
+    fn expect_next(&mut self, action: &str) -> Result<Token> {
         match self.lexer.next() {
-            None => Err(StatementError::unexpected_eof(
-                "an expression",
-                PARSING_A_PREFIX_EXPRESSION,
-            )),
+            None => Err(StatementError::unexpected_eof(action)),
             Some(token) => Ok(token),
         }
     }
@@ -651,25 +659,24 @@ mod tests {
 
     #[test]
     fn can_parse_a_program_with_only_let_statements() -> Result<()> {
-        let source: &str = indoc! {"
-        let x = 5;
-        let y = 10;
-        let foobar = 838383;
-        "};
+        let tests = vec![
+            ("let x = 5;", "x", Operand::Integer(5)),
+            ("let y = true;", "y", Operand::Boolean(true)),
+            ("let foobar = y;", "foobar", Operand::Identifier("y")),
+        ];
 
-        let mut parser = parser_from_source(source);
-        let program = parser.parse()?;
-
-        assert_eq!(3, program.statements().len());
-
-        let test_names = vec!["x", "y", "foobar"];
-
-        program
-            .statements()
-            .iter()
-            .zip(test_names)
-            .for_each(|(stmt, name)| test_let_statement(stmt, name));
-
+        for (source, identifier, value) in tests {
+            let mut parser = parser_from_source(source);
+            let program = parser.parse()?;
+            assert_eq!(1, program.statements().len());
+            match program.statements().first().unwrap().kind() {
+                StatementKind::Let(let_statement) => {
+                    assert_eq!(identifier, let_statement.name().name());
+                    test_literal_expression(let_statement.value(), value);
+                },
+                other => panic!("got {:?} expecting a let statement", other),
+            }
+        }
         Ok(())
     }
 
@@ -692,20 +699,24 @@ mod tests {
 
     #[test]
     fn can_parse_a_program_with_only_return_statements() -> Result<()> {
-        let source = indoc! {"
-        return 5;
-        return 10;
-        return 993322;
-        "};
+        let tests = vec![
+            ("return 5;", Operand::Integer(5)),
+            ("return true;", Operand::Boolean(true)),
+            ("return foobar;", Operand::Identifier("foobar"))
+        ];
 
-        let mut parser = parser_from_source(source);
-        let program = parser.parse()?;
-        assert_eq!(3, program.statements().len());
-
-        program
-            .statements()
-            .iter()
-            .for_each(|stmt| assert!(matches!(stmt.kind(), StatementKind::Return(_))));
+        for (source, value) in tests {
+            let mut parser = parser_from_source(source);
+            let program = parser.parse()?;
+            assert_eq!(1, program.statements().len());
+            match program.statements().first().unwrap().kind() {
+                StatementKind::Return(return_statement) => {
+                    assert_eq!(Tag::Return, return_statement.token().kind.tag());
+                    test_literal_expression(return_statement.value(), value);
+                },
+                other => panic!("got {:?} expecting a return statement", other)
+            }
+        }
         Ok(())
     }
 

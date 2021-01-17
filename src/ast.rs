@@ -603,12 +603,12 @@ impl Display for ExpressionStatement {
 pub struct LetStatement {
     token: Token,
     name: Identifier,
-    //value: Expression
+    value: Expression,
 }
 
 impl LetStatement {
-    pub fn new(token: Token, name: Identifier) -> Statement {
-        Statement::new(StatementKind::Let(LetStatement { token, name }))
+    pub fn new(token: Token, name: Identifier, value: Expression) -> Statement {
+        Statement::new(StatementKind::Let(LetStatement { token, name, value }))
     }
 
     pub fn name(&self) -> &Identifier {
@@ -619,35 +619,40 @@ impl LetStatement {
         &self.token
     }
 
-    // pub fn value(&self) -> &Expression {
-    //     &self.value
-    // }
+    pub fn value(&self) -> &Expression {
+        &self.value
+    }
 }
 
 impl Display for LetStatement {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{} = //expression goes here", self.name)
+        write!(f, "{} {} = {}", self.token, self.name, self.value)
     }
 }
 
 #[derive(Debug)]
 pub struct ReturnStatement {
-    token: Token, //value: Expression
+    token: Token,
+    value: Expression
 }
 
 impl ReturnStatement {
-    pub fn new(token: Token) -> Statement {
-        Statement::new(StatementKind::Return(ReturnStatement { token }))
+    pub fn new(token: Token, value: Expression) -> Statement {
+        Statement::new(StatementKind::Return(ReturnStatement { token, value }))
     }
 
     pub fn token(&self) -> &Token {
         &self.token
     }
+
+    pub fn value(&self) -> &Expression {
+        &self.value
+    }
 }
 
 impl Display for ReturnStatement {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "//expression goes here")
+        write!(f, "{} {};", self.token, self.value)
     }
 }
 
