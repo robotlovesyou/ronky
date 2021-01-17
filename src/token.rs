@@ -1,4 +1,4 @@
-use std::fmt::{self, Display, Formatter};
+use std::fmt::{self, Formatter};
 
 #[derive(Eq, PartialEq, Debug)]
 pub enum Kind {

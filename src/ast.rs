@@ -633,7 +633,7 @@ impl Display for LetStatement {
 #[derive(Debug)]
 pub struct ReturnStatement {
     token: Token,
-    value: Expression
+    value: Expression,
 }
 
 impl ReturnStatement {

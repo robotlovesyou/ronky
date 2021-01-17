@@ -2,13 +2,12 @@ use crate::ast::*;
 use crate::lexer::*;
 use crate::token::*;
 use std::collections::HashMap;
-use std::fmt::{self, Debug, Display, Formatter};
+use std::fmt::Debug;
 use std::iter::Peekable;
 use std::rc::Rc;
 use std::result;
 
 const PARSING_A_LET_STATEMENT: &'static str = "parsing a let statement";
-const PARSING_A_PROGRAM: &'static str = "parsing a program";
 const PARSING_A_PREFIX_EXPRESSION: &'static str = "parsing a prefix expression";
 const PARSING_AN_INFIX_EXPRESSION: &'static str = "parsing a infix expression";
 const PARSING_A_GROUPED_EXPRESSION: &'static str = "parsing a grouped expression";
@@ -353,7 +352,7 @@ impl Parser {
         let operator = match &token.kind.tag() {
             Tag::Bang => PrefixOperator::Not,
             Tag::Minus => PrefixOperator::Minus,
-            other => {
+            _ => {
                 return Err(StatementError::unexpected_token(
                     "a prefix operator",
                     &token,
@@ -379,7 +378,7 @@ impl Parser {
             GT => GreaterThan,
             EQ => Equals,
             NotEQ => NotEquals,
-            other => {
+            _ => {
                 return Err(StatementError::unexpected_token(
                     "an infix operator",
                     &token,
@@ -393,7 +392,7 @@ impl Parser {
         Ok(InfixExpression::new(left, right, operator))
     }
 
-    fn parse_grouped_expression(&mut self, token: Token) -> Result<Expression> {
+    fn parse_grouped_expression(&mut self, _: Token) -> Result<Expression> {
         let next_token = self.expect_next(PARSING_A_GROUPED_EXPRESSION)?;
         self.parse_expression(next_token, Precedence::Lowest)
             .and_then(|ex| {
@@ -405,15 +404,15 @@ impl Parser {
     fn parse_if_expression(&mut self, token: Token) -> Result<Expression> {
         self.expect_peek_consume(Tag::LParen, PARSING_AN_IF_EXPRESSION)?;
 
-        let mut next_token = self.expect_next(PARSING_AN_IF_EXPRESSION)?;
+        let next_token = self.expect_next(PARSING_AN_IF_EXPRESSION)?;
         let condition = self.parse_expression(next_token, Precedence::Lowest)?;
 
         self.expect_peek_consume(Tag::RParen, PARSING_AN_IF_EXPRESSION)?;
-        let mut next_token = self.expect_peek_consume(Tag::LBrace, PARSING_AN_IF_EXPRESSION)?;
+        let next_token = self.expect_peek_consume(Tag::LBrace, PARSING_AN_IF_EXPRESSION)?;
         let consequence = self.parse_block_statement(next_token)?;
 
         let alternative = if let Some(_) = self.optional_peek_consume(Tag::Else) {
-            let mut next_token = self.expect_peek_consume(Tag::LBrace, PARSING_AN_IF_EXPRESSION)?;
+            let next_token = self.expect_peek_consume(Tag::LBrace, PARSING_AN_IF_EXPRESSION)?;
             Some(self.parse_block_statement(next_token)?)
         } else {
             None
@@ -514,15 +513,13 @@ impl Parser {
         self.expect_peek_consume(Tag::Assign, PARSING_A_LET_STATEMENT)?;
         let next_token = self.expect_next(PARSING_A_LET_STATEMENT)?;
         let value = self.parse_expression(next_token, Precedence::Lowest)?;
-        self.expect_peek_consume(Tag::Semicolon, PARSING_A_LET_STATEMENT);
+        self.expect_peek_consume(Tag::Semicolon, PARSING_A_LET_STATEMENT)?;
         Ok(LetStatement::new(token, identifier, value))
     }
 
     fn parse_let_statement(&mut self, token: Token) -> Result<Statement> {
         match self.try_parse_let_statement(token) {
-            Ok(let_statement) => {
-                Ok(let_statement)
-            }
+            Ok(let_statement) => Ok(let_statement),
             Err(e) => {
                 self.consume_source_line();
                 Err(e)
@@ -635,17 +632,6 @@ mod tests {
         }
     }
 
-    fn test_let_statement(statement: &Statement, name: &str) {
-        assert!(matches!(statement.kind(), StatementKind::Let(_)));
-
-        match statement.kind() {
-            StatementKind::Let(ref let_statement) => {
-                assert_eq!(name, let_statement.name().name())
-            }
-            other => panic!("got a {:?} expecting a let statement", other),
-        }
-    }
-
     fn test_block_statement<T: Fn(&BlockStatement) -> ()>(statement: &Statement, t: T) {
         match statement.kind() {
             StatementKind::Block(block_statement) => t(block_statement),
@@ -673,7 +659,7 @@ mod tests {
                 StatementKind::Let(let_statement) => {
                     assert_eq!(identifier, let_statement.name().name());
                     test_literal_expression(let_statement.value(), value);
-                },
+                }
                 other => panic!("got {:?} expecting a let statement", other),
             }
         }
@@ -702,7 +688,7 @@ mod tests {
         let tests = vec![
             ("return 5;", Operand::Integer(5)),
             ("return true;", Operand::Boolean(true)),
-            ("return foobar;", Operand::Identifier("foobar"))
+            ("return foobar;", Operand::Identifier("foobar")),
         ];
 
         for (source, value) in tests {
@@ -713,8 +699,8 @@ mod tests {
                 StatementKind::Return(return_statement) => {
                     assert_eq!(Tag::Return, return_statement.token().kind.tag());
                     test_literal_expression(return_statement.value(), value);
-                },
-                other => panic!("got {:?} expecting a return statement", other)
+                }
+                other => panic!("got {:?} expecting a return statement", other),
             }
         }
         Ok(())
@@ -776,7 +762,7 @@ mod tests {
                         assert_eq!(operator, prefix.operator());
                         test_literal_expression(prefix.right().as_ref(), value);
                     }
-                    other => panic!("got {:?} expecting a prefix expression"),
+                    other => panic!("got {:?} expecting a prefix expression", other),
                 }
             })
         }
@@ -1001,7 +987,7 @@ mod tests {
                     });
                     assert!(if_expression.alternative().is_none());
                 }
-                other => panic!("got {:?} expecting an if expression"),
+                other => panic!("got {:?} expecting an if expression", other),
             },
         );
         Ok(())
@@ -1044,7 +1030,7 @@ mod tests {
                         },
                     );
                 }
-                other => panic!("got {:?} expecting an if expression"),
+                other => panic!("got {:?} expecting an if expression", other),
             },
         );
         Ok(())
@@ -1109,7 +1095,7 @@ mod tests {
                             assert_eq!(fp, p);
                         }
                     }
-                    other => panic!("got {:?} expecting a function literal expression"),
+                    other => panic!("got {:?} expecting a function literal expression", other),
                 }
             })
         }
