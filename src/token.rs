@@ -100,7 +100,7 @@ impl fmt::Display for Kind {
             RParen => ")".to_string(),
             LBrace => "{".to_string(),
             RBrace => "}".to_string(),
-            Function => "function".to_string(),
+            Function => "fn".to_string(),
             Let => "let".to_string(),
             True => "true".to_string(),
             False => "false".to_string(),

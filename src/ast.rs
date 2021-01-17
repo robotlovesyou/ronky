@@ -246,6 +246,7 @@ pub enum ExpressionKind {
     Prefix(PrefixExpression),
     Infix(InfixExpression),
     If(IfExpression),
+    FunctionLiteral(FunctionLiteralExpression),
 }
 
 impl ExpressionKind {
@@ -258,6 +259,7 @@ impl ExpressionKind {
             Infix(infix_expression) => infix_expression.token(),
             Boolean(boolean_expression) => boolean_expression.token(),
             If(if_expression) => if_expression.token(),
+            FunctionLiteral(function_literal_expression) => function_literal_expression.token(),
         }
     }
 }
@@ -272,6 +274,7 @@ impl Display for ExpressionKind {
             Infix(kind) => kind.fmt(f),
             Boolean(kind) => kind.fmt(f),
             If(kind) => kind.fmt(f),
+            FunctionLiteral(kind) => kind.fmt(f),
         }
     }
 }
@@ -330,6 +333,48 @@ impl Display for IfExpression {
                 Ok(r)
             }
         })
+    }
+}
+
+#[derive(Debug)]
+pub struct FunctionLiteralExpression {
+    token: Token,
+    parameters: Vec<Identifier>,
+    body: Statement,
+}
+
+impl FunctionLiteralExpression {
+    pub fn new(token: Token, parameters: Vec<Identifier>, body: Statement) -> Expression {
+        Expression::new(ExpressionKind::FunctionLiteral(FunctionLiteralExpression {
+            token,
+            parameters,
+            body,
+        }))
+    }
+
+    pub fn token(&self) -> &Token {
+        &self.token
+    }
+
+    pub fn parameters(&self) -> &[Identifier] {
+        &self.parameters
+    }
+
+    pub fn body(&self) -> &Statement {
+        &self.body
+    }
+}
+
+impl Display for FunctionLiteralExpression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let param_list = self
+            .parameters
+            .iter()
+            .map(|p| p.to_string())
+            .collect::<Vec<String>>()
+            .join(", ");
+
+        write!(f, "{} ({}){}", self.token, param_list, self.body)
     }
 }
 

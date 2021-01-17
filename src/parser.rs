@@ -10,8 +10,11 @@ use std::result;
 const PARSING_A_LET_STATEMENT: &'static str = "parsing a let statement";
 const PARSING_A_PROGRAM: &'static str = "parsing a program";
 const PARSING_A_PREFIX_EXPRESSION: &'static str = "parsing a prefix expression";
+const PARSING_AN_INFIX_EXPRESSION: &'static str = "parsing a infix expression";
 const PARSING_A_GROUPED_EXPRESSION: &'static str = "parsing a grouped expression";
 const PARSING_AN_IF_EXPRESSION: &'static str = "parsing an if expression";
+const PARSING_A_PARAMETER_LIST: &'static str = "parsing a parameter list";
+const PARSING_A_FUNCTION_LITERAL: &'static str = "parsing a function literal";
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
 enum Precedence {
@@ -78,22 +81,11 @@ pub struct ExpressionError {
 }
 
 impl ExpressionError {
-    pub fn no_prefix_parse_fn(token: &Token) -> Error {
+    pub fn no_parse_fn(token: &Token) -> Error {
         Error {
             kind: ErrorKind::Expression(ExpressionError {
                 message: format!(
-                    "no prefix parse fn for {} at line {} column {}",
-                    token, token.line, token.column
-                ),
-            }),
-        }
-    }
-
-    pub fn no_infix_parse_fn(token: &Token) -> Error {
-        Error {
-            kind: ErrorKind::Expression(ExpressionError {
-                message: format!(
-                    "no infix parse fn for {} at line {} column {}",
+                    "unexpected '{}' at line {} column {}",
                     token, token.line, token.column
                 ),
             }),
@@ -176,6 +168,10 @@ impl Parser {
 
         parser.register_prefix_fn(Tag::If, |parser: &mut Parser, token: Token| {
             parser.parse_if_expression(token)
+        });
+
+        parser.register_prefix_fn(Tag::Function, |parser: &mut Parser, token: Token| {
+            parser.parse_function_literal(token)
         });
 
         parser.register_infix_fn(
@@ -296,7 +292,7 @@ impl Parser {
         if let Some(f) = self.prefix_parse_fns.get(&token.kind.tag()) {
             Ok(f.clone())
         } else {
-            Err(ExpressionError::no_prefix_parse_fn(token))
+            Err(ExpressionError::no_parse_fn(token))
         }
     }
 
@@ -307,7 +303,7 @@ impl Parser {
         if let Some(f) = self.infix_parse_fns.get(&token.kind.tag()) {
             Ok(f.clone())
         } else {
-            Err(ExpressionError::no_infix_parse_fn(token))
+            Err(ExpressionError::no_parse_fn(token))
         }
     }
 
@@ -337,7 +333,7 @@ impl Parser {
             // Anything which does not parse as an i64 here would indicate a bug in the
             // lexer so ok to expect
             Kind::Int(repr) => repr.parse::<i64>().expect("not an integer literal"),
-            other => panic!("got {:?} expecting an Int"),
+            other => panic!("got {:?} expecting an Int", other),
         };
 
         Ok(IntegerLiteralExpression::new(token, value))
@@ -348,11 +344,16 @@ impl Parser {
     }
 
     fn parse_prefix_expression(&mut self, token: Token) -> Result<Expression> {
-        let operator = match token.kind {
-            Kind::Bang => PrefixOperator::Not,
-            Kind::Minus => PrefixOperator::Minus,
-            //TODO raise an error here, don't panic
-            other => panic!("{:?} is not a prefix operator"),
+        let operator = match &token.kind.tag() {
+            Tag::Bang => PrefixOperator::Not,
+            Tag::Minus => PrefixOperator::Minus,
+            other => {
+                return Err(StatementError::unexpected_token(
+                    "a prefix operator",
+                    &token,
+                    PARSING_A_PREFIX_EXPRESSION,
+                ))
+            }
         };
 
         let next_token = self.expect_next()?;
@@ -372,8 +373,13 @@ impl Parser {
             GT => GreaterThan,
             EQ => Equals,
             NotEQ => NotEquals,
-            //TODO raise an error here, don't panic
-            other => panic!("{:?} is not an infix operator", other),
+            other => {
+                return Err(StatementError::unexpected_token(
+                    "an infix operator",
+                    &token,
+                    PARSING_AN_INFIX_EXPRESSION,
+                ))
+            }
         };
 
         let next_token = self.expect_next()?;
@@ -413,6 +419,48 @@ impl Parser {
             consequence,
             alternative,
         ))
+    }
+
+    fn parse_function_literal(&mut self, token: Token) -> Result<Expression> {
+        self.expect_peek_consume(Tag::LParen, PARSING_A_FUNCTION_LITERAL)?;
+        let parameters = self.parse_function_parameters()?;
+        let next_token = self.expect_peek_consume(Tag::LBrace, PARSING_A_FUNCTION_LITERAL)?;
+        let body = self.parse_block_statement(next_token)?;
+        Ok(FunctionLiteralExpression::new(token, parameters, body))
+    }
+
+    fn parse_function_parameters(&mut self) -> Result<Vec<Identifier>> {
+        let mut identifiers = Vec::new();
+
+        while let Some(next_token) = self.lexer.next() {
+            if next_token.kind.tag() == Tag::RParen {
+                break;
+            }
+
+            if next_token.kind.tag() != Tag::Ident {
+                return Err(StatementError::unexpected_token(
+                    "identifier",
+                    &next_token,
+                    PARSING_A_PARAMETER_LIST,
+                ));
+            }
+            identifiers.push(Identifier::new(next_token));
+
+            if let Some(maybe_comma) = self.lexer.peek() {
+                if maybe_comma.kind.tag() != Tag::Comma && maybe_comma.kind.tag() != Tag::RParen {
+                    return Err(StatementError::unexpected_token(
+                        "comma or right paren",
+                        maybe_comma,
+                        PARSING_A_PARAMETER_LIST,
+                    ));
+                }
+                if maybe_comma.kind.tag() == Tag::Comma {
+                    self.expect_next()?;
+                }
+            }
+        }
+
+        Ok(identifiers)
     }
 
     fn parse_block_statement(&mut self, token: Token) -> Result<Statement> {
@@ -953,6 +1001,72 @@ mod tests {
                 other => panic!("got {:?} expecting an if expression"),
             },
         );
+        Ok(())
+    }
+
+    #[test]
+    fn can_parse_a_function_literal() -> Result<()> {
+        let source = "fn(x, y) {x + y;}";
+
+        let mut parser = parser_from_source(source);
+        let program = parser.parse()?;
+        assert_eq!(1, program.statements().len());
+        test_statement_as_expression_statement(
+            program.statements().first().unwrap(),
+            |ex| match ex.kind() {
+                ExpressionKind::FunctionLiteral(function) => {
+                    assert_eq!(2, function.parameters().len());
+                    assert_eq!("x", function.parameters()[0].name());
+                    assert_eq!("y", function.parameters()[1].name());
+                    test_block_statement(function.body(), |block_statement| {
+                        assert_eq!(1, block_statement.statements().len());
+                        test_statement_as_expression_statement(
+                            block_statement.statements().first().unwrap(),
+                            |block_ex| {
+                                test_infix_expression(
+                                    block_ex,
+                                    Operand::Identifier("x"),
+                                    Operand::Identifier("y"),
+                                    InfixOperator::Add,
+                                );
+                            },
+                        );
+                    });
+                }
+                other => panic!("got {:?} expecting a function literal", other),
+            },
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn can_parse_function_parameter_lists() -> Result<()> {
+        let tests = vec![
+            ("fn () {}", vec![]),
+            ("fn (x) {}", vec!["x"]),
+            ("fn (x, y) {}", vec!["x", "y"]),
+        ];
+
+        for (source, parameters) in tests {
+            let mut parser = parser_from_source(source);
+            let program = parser.parse()?;
+            assert_eq!(1, program.statements().len());
+            test_statement_as_expression_statement(program.statements().first().unwrap(), |ex| {
+                match ex.kind() {
+                    ExpressionKind::FunctionLiteral(function) => {
+                        let fn_params = function
+                            .parameters()
+                            .iter()
+                            .map(|p| p.name())
+                            .collect::<Vec<&str>>();
+                        for (fp, p) in fn_params.iter().zip(parameters.iter()) {
+                            assert_eq!(fp, p);
+                        }
+                    }
+                    other => panic!("got {:?} expecting a function literal expression"),
+                }
+            })
+        }
         Ok(())
     }
 }
