@@ -2,7 +2,7 @@ use crate::ast::*;
 use crate::lexer::*;
 use crate::token::*;
 use std::collections::HashMap;
-use std::fmt::Debug;
+use std::fmt::{self, Display, Debug, Formatter};
 use std::iter::Peekable;
 use std::rc::Rc;
 use std::result;
@@ -27,6 +27,10 @@ enum Precedence {
     Call,
 }
 
+trait ErrorMessage {
+    fn message(&self) -> String;
+}
+
 #[derive(Debug)]
 pub struct ParseError {
     errors: Vec<Error>,
@@ -42,9 +46,25 @@ impl ParseError {
     }
 }
 
+impl ErrorMessage for &ParseError {
+    fn message(&self) -> String {
+        let mut messages = Vec::new();
+        for err in self.errors.iter() {
+            messages.push(format!("{}", err));
+        }
+        messages.join("\n\n")
+    }
+}
+
 #[derive(Debug)]
 pub struct StatementError {
     message: String,
+}
+
+impl ErrorMessage for &StatementError {
+    fn message(&self) -> String {
+        self.message.clone()
+    }
 }
 
 impl StatementError {
@@ -77,6 +97,12 @@ pub struct ExpressionError {
     message: String,
 }
 
+impl ErrorMessage for &ExpressionError {
+    fn message(&self) -> String {
+        self.message.clone()
+    }
+}
+
 impl ExpressionError {
     pub fn no_parse_fn(token: &Token) -> Error {
         Error {
@@ -90,11 +116,32 @@ impl ExpressionError {
     }
 }
 
+impl Display for dyn ErrorMessage {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "Error: {}", self.message())
+    }
+}
+
 #[derive(Debug)]
-enum ErrorKind {
+pub enum ErrorKind {
     Parse(ParseError),
     Statement(StatementError),
     Expression(ExpressionError),
+}
+
+fn display_error_message(f: &mut Formatter<'_>, error_message: impl ErrorMessage) -> fmt::Result {
+    write!(f, "{}", error_message.message())
+}
+
+impl Display for ErrorKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            ErrorKind::Parse(error) => display_error_message(f, error),
+            ErrorKind::Statement(error) => display_error_message(f, error),
+            ErrorKind::Expression(error) => display_error_message(f, error),
+        }
+
+    }
 }
 
 #[derive(Debug)]
@@ -102,12 +149,18 @@ pub struct Error {
     kind: ErrorKind,
 }
 
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.kind)
+    }
+}
+
 pub type Result<T> = result::Result<T, Error>;
 
 type ParseInfixFn = Rc<dyn Fn(&mut Parser, Expression, Token) -> Result<Expression>>;
 type ParsePrefixFn = Rc<dyn Fn(&mut Parser, Token) -> Result<Expression>>;
 
-struct Parser {
+pub struct Parser {
     lexer: Peekable<Lexer>,
     prefix_parse_fns: HashMap<Tag, ParsePrefixFn>,
     infix_parse_fns: HashMap<Tag, ParseInfixFn>,
@@ -132,7 +185,7 @@ fn operator_precedence(token: &Token) -> Precedence {
 }
 
 impl Parser {
-    fn new(lexer: Lexer) -> Parser {
+    pub fn new(lexer: Lexer) -> Parser {
         let mut parser = Parser {
             lexer: lexer.peekable(),
             prefix_parse_fns: HashMap::new(),

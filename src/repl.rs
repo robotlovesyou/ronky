@@ -4,18 +4,23 @@ use std::{error, io};
 use crate::lexer::IntoTokens;
 use crate::source::ToSource;
 use core::result;
+use crate::parser::{Parser, Error};
+use crate::ast::Program;
 
 const PROMPT: &str = ">> ";
 
-pub fn start(stdin: io::Stdin, stdout: &mut io::Stdout) {
+pub fn start(stdin: io::Stdin, stdout: &mut io::Stdout, stderr: &mut io::Stderr) {
     let mut line = String::new();
     loop {
         write(stdout, PROMPT);
         match read(&stdin, &mut line) {
             Ok(_) => {
-                let tokens = line.as_str().to_source().into_tokens();
-                for token in tokens {
-                    write(stdout, format!("{:?}\n", token).as_str());
+                let mut parser = Parser::new(
+                    line.as_str().to_source().into_tokens()
+                );
+                match parser.parse() {
+                    Ok(program) => write(stdout, format!("{}\n", program).as_str()),
+                    Err(e) => write(stderr, format!("{}", e).as_str())
                 }
                 line.clear();
             }
@@ -27,9 +32,9 @@ pub fn start(stdin: io::Stdin, stdout: &mut io::Stdout) {
     }
 }
 
-fn write(stdout: &mut io::Stdout, s: &str) {
-    stdout.write_all(s.as_bytes()).unwrap();
-    stdout.flush().unwrap();
+fn write(out: &mut impl io::Write, s: &str) {
+    out.write_all(s.as_bytes()).unwrap();
+    out.flush().unwrap();
 }
 
 fn read(stdin: &io::Stdin, line: &mut String) -> result::Result<(), Box<dyn error::Error>> {

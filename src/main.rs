@@ -8,5 +8,5 @@ mod token;
 use std::io;
 
 fn main() {
-    repl::start(io::stdin(), &mut io::stdout());
+    repl::start(io::stdin(), &mut io::stdout(), &mut io::stderr());
 }
