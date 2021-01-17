@@ -7,14 +7,14 @@ use std::iter::Peekable;
 use std::rc::Rc;
 use std::result;
 
-const PARSING_A_LET_STATEMENT: &'static str = "parsing a let statement";
-const PARSING_A_PREFIX_EXPRESSION: &'static str = "parsing a prefix expression";
-const PARSING_AN_INFIX_EXPRESSION: &'static str = "parsing a infix expression";
-const PARSING_A_GROUPED_EXPRESSION: &'static str = "parsing a grouped expression";
-const PARSING_AN_IF_EXPRESSION: &'static str = "parsing an if expression";
-const PARSING_A_PARAMETER_LIST: &'static str = "parsing a parameter list";
-const PARSING_A_FUNCTION_LITERAL: &'static str = "parsing a function literal";
-const PARSING_A_RETURN_STATEMENT: &'static str = "parsing a return statement";
+const PARSING_A_LET_STATEMENT: &str = "parsing a let statement";
+const PARSING_A_PREFIX_EXPRESSION: &str = "parsing a prefix expression";
+const PARSING_AN_INFIX_EXPRESSION: &str = "parsing a infix expression";
+const PARSING_A_GROUPED_EXPRESSION: &str = "parsing a grouped expression";
+const PARSING_AN_IF_EXPRESSION: &str = "parsing an if expression";
+const PARSING_A_PARAMETER_LIST: &str = "parsing a parameter list";
+const PARSING_A_FUNCTION_LITERAL: &str = "parsing a function literal";
+const PARSING_A_RETURN_STATEMENT: &str = "parsing a return statement";
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
 enum Precedence {
@@ -29,14 +29,14 @@ enum Precedence {
 
 #[derive(Debug)]
 pub struct ParseError {
-    errors: Vec<Box<Error>>,
+    errors: Vec<Error>,
 }
 
 impl ParseError {
-    fn new(errors: Vec<Error>) -> Error {
+    fn new_parser_error(errors: Vec<Error>) -> Error {
         Error {
             kind: ErrorKind::Parse(ParseError {
-                errors: errors.into_iter().map(|e| Box::new(e)).collect(),
+                errors
             }),
         }
     }
@@ -104,10 +104,13 @@ pub struct Error {
 
 pub type Result<T> = result::Result<T, Error>;
 
+type ParseInfixFn = Rc<dyn Fn(&mut Parser, Expression, Token) -> Result<Expression>>;
+type ParsePrefixFn = Rc<dyn Fn(&mut Parser, Token) -> Result<Expression>>;
+
 struct Parser {
     lexer: Peekable<Lexer>,
-    prefix_parse_fns: HashMap<Tag, Rc<dyn Fn(&mut Parser, Token) -> Result<Expression>>>,
-    infix_parse_fns: HashMap<Tag, Rc<dyn Fn(&mut Parser, Expression, Token) -> Result<Expression>>>,
+    prefix_parse_fns: HashMap<Tag, ParsePrefixFn>,
+    infix_parse_fns: HashMap<Tag, ParseInfixFn>,
 }
 
 fn operator_precedence(token: &Token) -> Precedence {
@@ -269,7 +272,7 @@ impl Parser {
         if errors.is_empty() {
             Ok(Program::new(statements))
         } else {
-            Err(ParseError::new(errors))
+            Err(ParseError::new_parser_error(errors))
         }
     }
 
@@ -283,7 +286,7 @@ impl Parser {
 
     fn parse_expression_statement(&mut self, token: Token) -> Result<Statement> {
         self.parse_expression(token, Precedence::Lowest)
-            .map(|expression| ExpressionStatement::new(expression))
+            .map(ExpressionStatement::new_expression_statement)
             .map(|expression| {
                 self.optional_peek_consume(Tag::Semicolon);
                 expression
@@ -293,7 +296,7 @@ impl Parser {
     fn get_prefix_parse_fn(
         &mut self,
         token: &Token,
-    ) -> Result<Rc<dyn Fn(&mut Parser, Token) -> Result<Expression>>> {
+    ) -> Result<ParsePrefixFn> {
         if let Some(f) = self.prefix_parse_fns.get(&token.kind.tag()) {
             Ok(f.clone())
         } else {
@@ -304,7 +307,7 @@ impl Parser {
     fn get_infix_parse_fn(
         &mut self,
         token: &Token,
-    ) -> Result<Rc<dyn Fn(&mut Parser, Expression, Token) -> Result<Expression>>> {
+    ) -> Result<ParseInfixFn> {
         if let Some(f) = self.infix_parse_fns.get(&token.kind.tag()) {
             Ok(f.clone())
         } else {
@@ -330,7 +333,7 @@ impl Parser {
     }
 
     fn parse_identifier_expression(&mut self, token: Token) -> Result<Expression> {
-        Ok(IdentifierExpression::new(Identifier::new(token)))
+        Ok(IdentifierExpression::new_identifier_expression(Identifier::new(token)))
     }
 
     fn parse_integer_literal_expression(&mut self, token: Token) -> Result<Expression> {
@@ -341,11 +344,11 @@ impl Parser {
             other => panic!("got {:?} expecting an Int", other),
         };
 
-        Ok(IntegerLiteralExpression::new(token, value))
+        Ok(IntegerLiteralExpression::new_integer_literal_expression(token, value))
     }
 
     fn parse_boolean_literal_expression(&mut self, token: Token) -> Result<Expression> {
-        Ok(BooleanExpression::new(token))
+        Ok(BooleanExpression::new_boolean_expression(token))
     }
 
     fn parse_prefix_expression(&mut self, token: Token) -> Result<Expression> {
@@ -363,7 +366,7 @@ impl Parser {
 
         let next_token = self.expect_next(PARSING_A_PREFIX_EXPRESSION)?;
         let right = self.parse_expression(next_token, Precedence::Prefix)?;
-        Ok(PrefixExpression::new(token, operator, right))
+        Ok(PrefixExpression::new_prefix_expression(token, operator, right))
     }
 
     fn parse_infix_expression(&mut self, left: Expression, token: Token) -> Result<Expression> {
@@ -389,7 +392,7 @@ impl Parser {
 
         let next_token = self.expect_next(PARSING_AN_INFIX_EXPRESSION)?;
         let right = self.parse_expression(next_token, operator_precedence(&token))?;
-        Ok(InfixExpression::new(left, right, operator))
+        Ok(InfixExpression::new_infix_expression(left, right, operator))
     }
 
     fn parse_grouped_expression(&mut self, _: Token) -> Result<Expression> {
@@ -411,14 +414,14 @@ impl Parser {
         let next_token = self.expect_peek_consume(Tag::LBrace, PARSING_AN_IF_EXPRESSION)?;
         let consequence = self.parse_block_statement(next_token)?;
 
-        let alternative = if let Some(_) = self.optional_peek_consume(Tag::Else) {
+        let alternative = if self.optional_peek_consume(Tag::Else).is_some() {
             let next_token = self.expect_peek_consume(Tag::LBrace, PARSING_AN_IF_EXPRESSION)?;
             Some(self.parse_block_statement(next_token)?)
         } else {
             None
         };
 
-        Ok(IfExpression::new(
+        Ok(IfExpression::new_if_expression(
             token,
             condition,
             consequence,
@@ -431,7 +434,7 @@ impl Parser {
         let parameters = self.parse_function_parameters()?;
         let next_token = self.expect_peek_consume(Tag::LBrace, PARSING_A_FUNCTION_LITERAL)?;
         let body = self.parse_block_statement(next_token)?;
-        Ok(FunctionLiteralExpression::new(token, parameters, body))
+        Ok(FunctionLiteralExpression::new_function_literal_expression(token, parameters, body))
     }
 
     fn parse_function_parameters(&mut self) -> Result<Vec<Identifier>> {
@@ -477,12 +480,12 @@ impl Parser {
             }
             statements.push(self.parse_statement(next_token)?);
         }
-        Ok(BlockStatement::new(token, statements))
+        Ok(BlockStatement::new_block_statement(token, statements))
     }
 
     fn parse_call_expression(&mut self, left: Expression, token: Token) -> Result<Expression> {
         let arguments = self.parse_call_arguments()?;
-        Ok(CallExpression::new(token, left, arguments))
+        Ok(CallExpression::new_call_expression(token, left, arguments))
     }
 
     fn parse_call_arguments(&mut self) -> Result<Vec<Expression>> {
@@ -514,7 +517,7 @@ impl Parser {
         let next_token = self.expect_next(PARSING_A_LET_STATEMENT)?;
         let value = self.parse_expression(next_token, Precedence::Lowest)?;
         self.expect_peek_consume(Tag::Semicolon, PARSING_A_LET_STATEMENT)?;
-        Ok(LetStatement::new(token, identifier, value))
+        Ok(LetStatement::new_let_statement(token, identifier, value))
     }
 
     fn parse_let_statement(&mut self, token: Token) -> Result<Statement> {
@@ -531,7 +534,7 @@ impl Parser {
         let next_token = self.expect_next(PARSING_A_RETURN_STATEMENT)?;
         let value = self.parse_expression(next_token, Precedence::Lowest)?;
         self.expect_peek_consume(Tag::Semicolon, PARSING_A_RETURN_STATEMENT)?;
-        Ok(ReturnStatement::new(token, value))
+        Ok(ReturnStatement::new_return_statement(token, value))
     }
 
     fn parse_return_statement(&mut self, token: Token) -> Result<Statement> {
@@ -760,7 +763,7 @@ mod tests {
                 match ex.kind() {
                     ExpressionKind::Prefix(prefix) => {
                         assert_eq!(operator, prefix.operator());
-                        test_literal_expression(prefix.right().as_ref(), value);
+                        test_literal_expression(prefix.right(), value);
                     }
                     other => panic!("got {:?} expecting a prefix expression", other),
                 }

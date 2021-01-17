@@ -93,7 +93,7 @@ pub struct BlockStatement {
 }
 
 impl BlockStatement {
-    pub fn new(token: Token, statements: Vec<Statement>) -> Statement {
+    pub fn new_block_statement(token: Token, statements: Vec<Statement>) -> Statement {
         Statement::new(StatementKind::Block(BlockStatement { token, statements }))
     }
 
@@ -291,7 +291,7 @@ pub struct IfExpression {
 }
 
 impl IfExpression {
-    pub fn new(
+    pub fn new_if_expression(
         token: Token,
         condition: Expression,
         consequence: Statement,
@@ -309,7 +309,7 @@ impl IfExpression {
         &self.token
     }
 
-    pub fn condition(&self) -> &Box<Expression> {
+    pub fn condition(&self) -> &Expression {
         &self.condition
     }
 
@@ -329,11 +329,11 @@ impl Display for IfExpression {
             "{} ({}) {})",
             self.token, self.condition, self.consequence
         )
-        .and_then(|r| {
+        .and_then(|_| {
             if let Some(ref alt) = self.alternative {
                 write!(f, "else {}", alt)
             } else {
-                Ok(r)
+                Ok(())
             }
         })
     }
@@ -347,7 +347,7 @@ pub struct FunctionLiteralExpression {
 }
 
 impl FunctionLiteralExpression {
-    pub fn new(token: Token, parameters: Vec<Identifier>, body: Statement) -> Expression {
+    pub fn new_function_literal_expression(token: Token, parameters: Vec<Identifier>, body: Statement) -> Expression {
         Expression::new(ExpressionKind::FunctionLiteral(FunctionLiteralExpression {
             token,
             parameters,
@@ -387,7 +387,7 @@ pub struct IdentifierExpression {
 }
 
 impl IdentifierExpression {
-    pub fn new(identifier: Identifier) -> Expression {
+    pub fn new_identifier_expression(identifier: Identifier) -> Expression {
         Expression::new(ExpressionKind::Identifier(IdentifierExpression {
             identifier,
         }))
@@ -411,7 +411,7 @@ pub struct IntegerLiteralExpression {
 }
 
 impl IntegerLiteralExpression {
-    pub fn new(token: Token, value: i64) -> Expression {
+    pub fn new_integer_literal_expression(token: Token, value: i64) -> Expression {
         Expression::new(ExpressionKind::IntegerLiteral(IntegerLiteralExpression {
             token,
             value,
@@ -439,7 +439,7 @@ pub struct BooleanExpression {
 }
 
 impl BooleanExpression {
-    pub fn new(token: Token) -> Expression {
+    pub fn new_boolean_expression(token: Token) -> Expression {
         Expression::new(ExpressionKind::Boolean(BooleanExpression { token }))
     }
 
@@ -462,15 +462,15 @@ impl Display for BooleanExpression {
 pub struct CallExpression {
     token: Token,
     function: Box<Expression>,
-    arguments: Vec<Box<Expression>>,
+    arguments: Vec<Expression>,
 }
 
 impl CallExpression {
-    pub fn new(token: Token, function: Expression, arguments: Vec<Expression>) -> Expression {
+    pub fn new_call_expression(token: Token, function: Expression, arguments: Vec<Expression>) -> Expression {
         Expression::new(ExpressionKind::Call(CallExpression {
             token,
             function: Box::new(function),
-            arguments: arguments.into_iter().map(|a| Box::new(a)).collect(),
+            arguments,
         }))
     }
 
@@ -478,11 +478,11 @@ impl CallExpression {
         &self.token
     }
 
-    pub fn function(&self) -> &Box<Expression> {
+    pub fn function(&self) -> &Expression {
         &self.function
     }
 
-    pub fn arguments(&self) -> &[Box<Expression>] {
+    pub fn arguments(&self) -> &[Expression] {
         &self.arguments
     }
 }
@@ -506,7 +506,7 @@ pub struct PrefixExpression {
 }
 
 impl PrefixExpression {
-    pub fn new(token: Token, operator: PrefixOperator, right_expression: Expression) -> Expression {
+    pub fn new_prefix_expression(token: Token, operator: PrefixOperator, right_expression: Expression) -> Expression {
         Expression::new(ExpressionKind::Prefix(PrefixExpression {
             token,
             operator,
@@ -522,7 +522,7 @@ impl PrefixExpression {
         self.operator
     }
 
-    pub fn right(&self) -> &Box<Expression> {
+    pub fn right(&self) -> &Expression {
         &self.right
     }
 }
@@ -541,7 +541,7 @@ pub struct InfixExpression {
 }
 
 impl InfixExpression {
-    pub fn new(left: Expression, right: Expression, operator: InfixOperator) -> Expression {
+    pub fn new_infix_expression(left: Expression, right: Expression, operator: InfixOperator) -> Expression {
         Expression::new(ExpressionKind::Infix(InfixExpression {
             left: Box::new(left),
             right: Box::new(right),
@@ -553,11 +553,11 @@ impl InfixExpression {
         &self.left.token()
     }
 
-    pub fn left(&self) -> &Box<Expression> {
+    pub fn left(&self) -> &Expression {
         &self.left
     }
 
-    pub fn right(&self) -> &Box<Expression> {
+    pub fn right(&self) -> &Expression {
         &self.right
     }
 
@@ -578,7 +578,7 @@ pub struct ExpressionStatement {
 }
 
 impl ExpressionStatement {
-    pub fn new(expression: Expression) -> Statement {
+    pub fn new_expression_statement(expression: Expression) -> Statement {
         Statement::new(StatementKind::Expression(ExpressionStatement {
             expression,
         }))
@@ -607,7 +607,7 @@ pub struct LetStatement {
 }
 
 impl LetStatement {
-    pub fn new(token: Token, name: Identifier, value: Expression) -> Statement {
+    pub fn new_let_statement(token: Token, name: Identifier, value: Expression) -> Statement {
         Statement::new(StatementKind::Let(LetStatement { token, name, value }))
     }
 
@@ -637,7 +637,7 @@ pub struct ReturnStatement {
 }
 
 impl ReturnStatement {
-    pub fn new(token: Token, value: Expression) -> Statement {
+    pub fn new_return_statement(token: Token, value: Expression) -> Statement {
         Statement::new(StatementKind::Return(ReturnStatement { token, value }))
     }
 
