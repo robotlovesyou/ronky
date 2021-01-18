@@ -1,8 +1,13 @@
 use std::fmt::{self, Display, Formatter};
+use std::rc::Rc;
+
+use lazy_static::lazy_static;
 
 const TRUE: bool = true;
 const FALSE: bool = false;
+const NULL: NullValue = NullValue;
 
+#[derive(Debug)]
 pub struct Object {
     kind: ObjectKind
 }
@@ -33,12 +38,14 @@ pub trait Inspectable<T> where T: Display {
     }
 }
 
+#[derive(Debug)]
 pub enum ObjectKind {
     Integer(Integer),
     Boolean(Boolean),
-    Null(&'static Null),
+    Null(Null),
 }
 
+#[derive(Debug)]
 pub struct Integer {
     pub value: i64
 }
@@ -82,6 +89,7 @@ impl Inspectable<bool> for Boolean {
     }
 }
 
+#[derive(Debug)]
 pub struct NullValue;
 
 impl Display for NullValue {
@@ -90,12 +98,17 @@ impl Display for NullValue {
     }
 }
 
-pub struct Null {
-    value: NullValue,
+#[derive(Debug)]
+pub struct Null;
+
+impl Null {
+    pub fn new_null_object() -> Object {
+        Object::new(ObjectKind::Null(Null))
+    }
 }
 
 impl Inspectable<NullValue> for Null {
     fn value(&self) -> &NullValue {
-        &self.value
+        &NULL
     }
 }

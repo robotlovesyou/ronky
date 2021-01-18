@@ -6,7 +6,7 @@ use crate::source::ToSource;
 use core::result;
 use crate::parser::{Parser, Error};
 use crate::ast::Program;
-use crate::evaluator::Evaluable;
+use crate::evaluator::{Evaluable, Environment};
 
 const PROMPT: &str = ">> ";
 
@@ -20,9 +20,12 @@ pub fn start(stdin: io::Stdin, stdout: &mut io::Stdout, stderr: &mut io::Stderr)
                     line.as_str().to_source().into_tokens()
                 );
                 match parser.parse() {
-                    Ok(program) => match program.evaluate() {
-                        Ok(object) => write(stdout, format!("{}\n", object.inspect()).as_str()),
-                        Err(e) => write(stderr, format!("{:?}", e).as_str()),
+                    Ok(program) => {
+                        let mut env = Environment{};
+                        match program.evaluate(&mut env) {
+                            Ok(object) => write(stdout, format!("{}\n", object.inspect()).as_str()),
+                            Err(e) => write(stderr, format!("{:?}", e).as_str()),
+                        }
                     }
                     //write(stdout, format!("{}\n", program).as_str()),
                     Err(e) => write(stderr, format!("{}", e).as_str())
