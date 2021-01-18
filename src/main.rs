@@ -4,6 +4,8 @@ mod parser;
 mod repl;
 mod source;
 mod token;
+mod object;
+mod evaluator;
 
 use std::io;
 
