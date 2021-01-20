@@ -1,6 +1,6 @@
 use std::result;
 
-use crate::ast::{Program, Statement, StatementKind, ExpressionStatement, Expression, ExpressionKind, IntegerLiteralExpression, BooleanExpression, PrefixExpression, PrefixOperator, InfixOperator};
+use crate::ast::{Program, Statement, StatementKind, ExpressionStatement, Expression, ExpressionKind, IntegerLiteralExpression, BooleanExpression, PrefixExpression, PrefixOperator, InfixOperator, IfExpression};
 use crate::parser;
 use crate::object::{Object, ObjectKind, Integer, Inspectable, Boolean, Null};
 use std::borrow::Borrow;
@@ -55,13 +55,24 @@ impl Evaluable for Program {
     }
 }
 
+impl Evaluable for &[Statement] {
+    fn evaluate(&self, env: &mut Environment) -> Result<Object> {
+        // TODO: This is a terrible hack
+        if self.is_empty() {
+            Ok(Null::new_null_object())
+        } else {
+            self.last().unwrap().evaluate(env)
+        }
+    }
+}
+
 impl Evaluable for &Statement {
     fn evaluate(&self, env: &mut Environment) -> Result<Object> {
         match self.kind() {
             StatementKind::Let(_) => unimplemented!(),
             StatementKind::Return(_) => unimplemented!(),
             StatementKind::Expression(kind) => kind.evaluate(env),
-            StatementKind::Block(_) => unimplemented!(),
+            StatementKind::Block(kind) => kind.statements().evaluate(env)
         }
     }
 }
@@ -87,7 +98,7 @@ impl Evaluable for &Expression {
                 let right = kind.right().evaluate(env)?;
                 evaluate_infix_expression(kind.operator(), &left, &right)
             },
-            ExpressionKind::If(_) => unimplemented!(),
+            ExpressionKind::If(kind) => evaluate_if_expression(kind, env),
             ExpressionKind::FunctionLiteral(_) => unimplemented!(),
             ExpressionKind::Call(_) => unimplemented!(),
         }
@@ -127,21 +138,52 @@ fn eval_prefix_neg_expression(value: &Object) -> Object {
 fn evaluate_infix_expression(operator: InfixOperator, left: &Object, right: &Object) -> Result<Object> {
     match (left.kind(), right.kind()) {
         (ObjectKind::Integer(a), ObjectKind::Integer(b)) => evaluate_integer_infix_expression(operator, a, b),
+        (ObjectKind::Boolean(a), ObjectKind::Boolean(b)) => evaluate_boolean_infix_expression(operator, a, b),
+        // TODO: this should raise an error, not panic
         other => panic!("cannot operate on {:?}", other),
     }
 }
 
 fn evaluate_integer_infix_expression(operator: InfixOperator, left: &Integer, right: &Integer) -> Result<Object> {
     Ok(match operator {
-        InfixOperator::Add => Integer::new_integer_object(left.value + right.value),
-        InfixOperator::Subtract => Integer::new_integer_object(left.value - right.value),
-        InfixOperator::Multiply => Integer::new_integer_object(left.value * right.value),
-        InfixOperator::Divide => Integer::new_integer_object(left.value / right.value),
-        InfixOperator::GreaterThan => Boolean::new_boolean_object(left.value > right.value),
-        InfixOperator::LessThan => Boolean::new_boolean_object(left.value < right.value),
-        InfixOperator::Equals => Boolean::new_boolean_object(left.value == right.value),
-        InfixOperator::NotEquals => Boolean::new_boolean_object(left.value != right.value)
+        InfixOperator::Add => Integer::new_integer_object(left.value() + right.value()),
+        InfixOperator::Subtract => Integer::new_integer_object(left.value() - right.value()),
+        InfixOperator::Multiply => Integer::new_integer_object(left.value() * right.value()),
+        InfixOperator::Divide => Integer::new_integer_object(left.value() / right.value()),
+        InfixOperator::GreaterThan => Boolean::new_boolean_object(left.value() > right.value()),
+        InfixOperator::LessThan => Boolean::new_boolean_object(left.value() < right.value()),
+        InfixOperator::Equals => Boolean::new_boolean_object(left.value() == right.value()),
+        InfixOperator::NotEquals => Boolean::new_boolean_object(left.value() != right.value())
     })
+}
+
+fn evaluate_boolean_infix_expression(operator: InfixOperator, left: &Boolean, right: &Boolean) -> Result<Object> {
+    Ok(match operator {
+        InfixOperator::Equals => Boolean::new_boolean_object(left.value() == right.value()),
+        InfixOperator::NotEquals => Boolean::new_boolean_object(left.value() != right.value()),
+        // TODO: this should raise an error, not panic
+        other => panic!("{:?} is not a valid boolean operation", other)
+    })
+}
+
+fn evaluate_if_expression(expression: &IfExpression, env: &mut Environment) -> Result<Object> {
+    let condition = expression.condition().evaluate(env)?;
+    if is_truthy(&condition) {
+        expression.consequence().evaluate(env)
+    } else {
+        expression.alternative().as_ref().map_or_else(
+            || Ok(Null::new_null_object()),
+            |alternative| alternative.evaluate(env)
+        )
+    }
+}
+
+fn is_truthy(object: &Object) -> bool {
+    match object.kind() {
+        ObjectKind::Integer(kind) => *kind.value() != 0,
+        ObjectKind::Boolean(kind) => *kind.value(),
+        ObjectKind::Null(_) => false
+    }
 }
 
 
@@ -156,8 +198,9 @@ mod tests {
     enum Value {
         Integer(i64),
         Boolean(bool),
+        Null
     }
-
+    
     impl From<parser::Error> for Error {
         fn from(e: parser::Error) -> Self {
             ParserError::new_parser_error(e)
@@ -174,6 +217,7 @@ mod tests {
         match (object.kind(), expected_value) {
             (ObjectKind::Integer(integer), Value::Integer(expected)) => assert_eq!(&expected, integer.value(), "{}", source),
             (ObjectKind::Boolean(boolean), Value::Boolean(expected)) => assert_eq!(&expected, boolean.value(), "{}", source),
+            (ObjectKind::Null(_), Value::Null) => {}, // do nothing, these are always equal
             other => panic!("{:?} is not a valid option with source {}", other, source)
         }
     }
@@ -238,6 +282,30 @@ mod tests {
             ("1 != 1", Value::Boolean(false)),
             ("1 == 2", Value::Boolean(false)),
             ("1 != 2", Value::Boolean(true)),
+            ("true == true", Value::Boolean(true)),
+            ("false == false", Value::Boolean(true)),
+            ("true == false", Value::Boolean(false)),
+            ("true != false", Value::Boolean(true)),
+            ("false != true", Value::Boolean(true)),
+            ("(1 < 2) == true", Value::Boolean(true)),
+            ("(1 < 2) == false", Value::Boolean(false)),
+            ("(1 > 2) == true", Value::Boolean(false)),
+            ("(1 > 2) == false", Value::Boolean(true)),
+        ];
+
+        test_evaluated_value(tests)
+    }
+    
+    #[test]
+    fn can_parse_if_else_expression() -> Result<()> {
+        let tests = vec![
+            ("if (true) { 10 }", Value::Integer(10)),
+            ("if (false) { 10 }", Value::Null),
+            ("if (1) { 10 }", Value::Integer(10)),
+            ("if (1 < 2) { 10 }", Value::Integer(10)),
+            ("if (1 > 2) { 10 }", Value::Null),
+            ("if (1 > 2) { 10 } else { 20 }", Value::Integer(20)),
+            ("if (1 < 2) { 10 } else { 20 }", Value::Integer(10)),
         ];
 
         test_evaluated_value(tests)
