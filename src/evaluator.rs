@@ -5,11 +5,11 @@ use crate::ast::{
     InfixOperator, IntegerLiteralExpression, PrefixExpression, PrefixOperator, Program, Statement,
     StatementKind,
 };
+use crate::location::Location;
 use crate::object::{Boolean, Inspectable, Integer, Null, Object, ObjectKind, Return};
 use crate::parser;
 use std::borrow::Borrow;
 use std::os::macos::raw::stat;
-use crate::location::Location;
 
 #[derive(Debug)]
 pub struct Error {
@@ -44,12 +44,15 @@ type Result<T> = result::Result<T, Error>;
 
 pub struct Environment<'a> {
     parent: Option<&'a Environment<'a>>,
-    location: Location
+    location: Location,
 }
 
 impl Default for Environment<'_> {
     fn default() -> Self {
-        Environment {parent: None, location: Location::default()}
+        Environment {
+            parent: None,
+            location: Location::default(),
+        }
     }
 }
 
@@ -63,7 +66,10 @@ impl Environment<'_> {
     }
 
     fn spawn(&self) -> Environment {
-        Environment{parent: Some(&self), location: self.location}
+        Environment {
+            parent: Some(&self),
+            location: self.location,
+        }
     }
 }
 
@@ -129,7 +135,9 @@ impl Evaluable for &Expression {
         match self.kind() {
             ExpressionKind::Boolean(kind) => evaluate_bool_literal_expresson(kind, env.location()),
             ExpressionKind::Identifier(_) => unimplemented!(),
-            ExpressionKind::IntegerLiteral(kind) => evaluate_integer_literal_expression(kind, env.location()),
+            ExpressionKind::IntegerLiteral(kind) => {
+                evaluate_integer_literal_expression(kind, env.location())
+            }
             ExpressionKind::Prefix(kind) => {
                 let location = env.location();
                 let right = kind.right().evaluate(env)?;
@@ -148,15 +156,25 @@ impl Evaluable for &Expression {
     }
 }
 
-fn evaluate_integer_literal_expression(expression: &IntegerLiteralExpression, location: Location) -> Result<Object> {
+fn evaluate_integer_literal_expression(
+    expression: &IntegerLiteralExpression,
+    location: Location,
+) -> Result<Object> {
     Ok(Integer::new_integer_object(expression.value(), location))
 }
 
-fn evaluate_bool_literal_expresson(expression: &BooleanExpression, location: Location) -> Result<Object> {
+fn evaluate_bool_literal_expresson(
+    expression: &BooleanExpression,
+    location: Location,
+) -> Result<Object> {
     Ok(Boolean::new_boolean_object(expression.value(), location))
 }
 
-fn evaluate_prefix_expression(operator: PrefixOperator, right: &Object, location: Location) -> Result<Object> {
+fn evaluate_prefix_expression(
+    operator: PrefixOperator,
+    right: &Object,
+    location: Location,
+) -> Result<Object> {
     match operator {
         PrefixOperator::Minus => Ok(eval_prefix_neg_expression(right, location)),
         PrefixOperator::Not => Ok(eval_prefix_not_expression(right, location)),
@@ -165,7 +183,9 @@ fn evaluate_prefix_expression(operator: PrefixOperator, right: &Object, location
 
 fn eval_prefix_not_expression(value: &Object, location: Location) -> Object {
     match value.kind() {
-        ObjectKind::Integer(integer) => Boolean::new_boolean_object(*integer.value() == 0, location),
+        ObjectKind::Integer(integer) => {
+            Boolean::new_boolean_object(*integer.value() == 0, location)
+        }
         ObjectKind::Boolean(boolean) => Boolean::new_boolean_object(!(*boolean.value()), location),
         ObjectKind::Null(_) => Boolean::new_boolean_object(false, location),
         // TODO: This should raise an error
@@ -206,13 +226,27 @@ fn evaluate_integer_infix_expression(
 ) -> Result<Object> {
     Ok(match operator {
         InfixOperator::Add => Integer::new_integer_object(left.value() + right.value(), location),
-        InfixOperator::Subtract => Integer::new_integer_object(left.value() - right.value(), location),
-        InfixOperator::Multiply => Integer::new_integer_object(left.value() * right.value(), location),
-        InfixOperator::Divide => Integer::new_integer_object(left.value() / right.value(), location),
-        InfixOperator::GreaterThan => Boolean::new_boolean_object(left.value() > right.value(), location),
-        InfixOperator::LessThan => Boolean::new_boolean_object(left.value() < right.value(), location),
-        InfixOperator::Equals => Boolean::new_boolean_object(left.value() == right.value(), location),
-        InfixOperator::NotEquals => Boolean::new_boolean_object(left.value() != right.value(), location),
+        InfixOperator::Subtract => {
+            Integer::new_integer_object(left.value() - right.value(), location)
+        }
+        InfixOperator::Multiply => {
+            Integer::new_integer_object(left.value() * right.value(), location)
+        }
+        InfixOperator::Divide => {
+            Integer::new_integer_object(left.value() / right.value(), location)
+        }
+        InfixOperator::GreaterThan => {
+            Boolean::new_boolean_object(left.value() > right.value(), location)
+        }
+        InfixOperator::LessThan => {
+            Boolean::new_boolean_object(left.value() < right.value(), location)
+        }
+        InfixOperator::Equals => {
+            Boolean::new_boolean_object(left.value() == right.value(), location)
+        }
+        InfixOperator::NotEquals => {
+            Boolean::new_boolean_object(left.value() != right.value(), location)
+        }
     })
 }
 
@@ -223,8 +257,12 @@ fn evaluate_boolean_infix_expression(
     location: Location,
 ) -> Result<Object> {
     Ok(match operator {
-        InfixOperator::Equals => Boolean::new_boolean_object(left.value() == right.value(), location),
-        InfixOperator::NotEquals => Boolean::new_boolean_object(left.value() != right.value(), location),
+        InfixOperator::Equals => {
+            Boolean::new_boolean_object(left.value() == right.value(), location)
+        }
+        InfixOperator::NotEquals => {
+            Boolean::new_boolean_object(left.value() != right.value(), location)
+        }
         // TODO: this should raise an error, not panic
         other => panic!("{:?} is not a valid boolean operation", other),
     })

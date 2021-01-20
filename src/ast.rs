@@ -1,6 +1,6 @@
+use crate::location::Location;
 use crate::token::{Kind, Token};
 use std::fmt::{self, Display, Formatter};
-use crate::location::Location;
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum PrefixOperator {
@@ -694,6 +694,9 @@ mod tests {
 
     #[test]
     fn can_construct_an_identifier() {
-        Identifier::new(Token::new(Location::default(), Kind::Ident("abc".to_string())));
+        Identifier::new(Token::new(
+            Location::default(),
+            Kind::Ident("abc".to_string()),
+        ));
     }
 }

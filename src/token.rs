@@ -1,5 +1,5 @@
-use std::fmt::{self, Formatter};
 use crate::location::Location;
+use std::fmt::{self, Formatter};
 
 #[derive(Eq, PartialEq, Debug)]
 pub enum Kind {

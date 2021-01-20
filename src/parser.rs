@@ -104,10 +104,7 @@ impl ExpressionError {
     pub fn no_parse_fn(token: &Token) -> Error {
         Error {
             kind: ErrorKind::Expression(ExpressionError {
-                message: format!(
-                    "unexpected '{}' at {}",
-                    token, token.location
-                ),
+                message: format!("unexpected '{}' at {}", token, token.location),
             }),
         }
     }

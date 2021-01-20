@@ -1,9 +1,9 @@
 use std::fmt::{self, Debug, Display, Formatter};
 use std::rc::Rc;
 
+use crate::location::Location;
 use lazy_static::lazy_static;
 use std::mem;
-use crate::location::Location;
 
 const TRUE: bool = true;
 const FALSE: bool = false;
@@ -12,7 +12,7 @@ const NULL: NullValue = NullValue;
 #[derive(Debug)]
 pub struct Object {
     kind: ObjectKind,
-    location: Location
+    location: Location,
 }
 
 impl Object {
@@ -147,9 +147,12 @@ pub struct Return {
 
 impl Return {
     pub fn new_return_object(value: Object, location: Location) -> Object {
-        Object::new(ObjectKind::Return(Return {
-            value: Box::new(value),
-        }), location)
+        Object::new(
+            ObjectKind::Return(Return {
+                value: Box::new(value),
+            }),
+            location,
+        )
     }
 
     /// Consume this return value and extract the wrapped Object.

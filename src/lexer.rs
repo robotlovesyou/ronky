@@ -130,8 +130,8 @@ mod tests {
     use crate::source::ToSource;
     use crate::token::{Kind, Token};
 
-    use indoc::indoc;
     use crate::location::Location;
+    use indoc::indoc;
 
     const INPUT: &'static str = indoc! {"\
     let five = 5;
