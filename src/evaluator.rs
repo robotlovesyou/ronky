@@ -1,8 +1,9 @@
 use std::result;
 
-use crate::ast::{Program, Statement, StatementKind, ExpressionStatement, Expression, ExpressionKind, IntegerLiteralExpression, BooleanExpression, PrefixExpression, PrefixOperator};
+use crate::ast::{Program, Statement, StatementKind, ExpressionStatement, Expression, ExpressionKind, IntegerLiteralExpression, BooleanExpression, PrefixExpression, PrefixOperator, InfixOperator};
 use crate::parser;
 use crate::object::{Object, ObjectKind, Integer, Inspectable, Boolean, Null};
+use std::borrow::Borrow;
 
 #[derive(Debug)]
 pub struct Error {
@@ -74,11 +75,18 @@ impl Evaluable for &ExpressionStatement {
 impl Evaluable for &Expression {
     fn evaluate(&self, env: &mut Environment) -> Result<Object> {
         match self.kind() {
-            ExpressionKind::Boolean(kind) => kind.evaluate(env),
+            ExpressionKind::Boolean(kind) => evaluate_bool_literal_expresson(kind),
             ExpressionKind::Identifier(_) => unimplemented!(),
-            ExpressionKind::IntegerLiteral(kind) => kind.evaluate(env),
-            ExpressionKind::Prefix(kind) => kind.evaluate(env),
-            ExpressionKind::Infix(_) => unimplemented!(),
+            ExpressionKind::IntegerLiteral(kind) => evaluate_integer_literal_expression(kind),
+            ExpressionKind::Prefix(kind) => {
+                let right = kind.right().evaluate(env)?;
+                evaluate_prefix_expression(kind.operator(), &right)
+            }
+            ExpressionKind::Infix(kind) => {
+                let left = kind.left().evaluate(env)?;
+                let right = kind.right().evaluate(env)?;
+                evaluate_infix_expression(kind.operator(), &left, &right)
+            },
             ExpressionKind::If(_) => unimplemented!(),
             ExpressionKind::FunctionLiteral(_) => unimplemented!(),
             ExpressionKind::Call(_) => unimplemented!(),
@@ -86,42 +94,54 @@ impl Evaluable for &Expression {
     }
 }
 
-impl Evaluable for &IntegerLiteralExpression {
-    fn evaluate(&self, env: &mut Environment) -> Result<Object> {
-        Ok(Integer::new_integer_object(self.value()))
+fn evaluate_integer_literal_expression(expression: &IntegerLiteralExpression) -> Result<Object> {
+    Ok(Integer::new_integer_object(expression.value()))
+}
+
+fn evaluate_bool_literal_expresson(expression: &BooleanExpression) -> Result<Object> {
+    Ok(Boolean::new_boolean_object(expression.value()))
+}
+
+fn evaluate_prefix_expression(operator: PrefixOperator, right: &Object) -> Result<Object> {
+    match operator {
+        PrefixOperator::Minus => Ok(eval_prefix_neg_expression(right)),
+        PrefixOperator::Not => Ok(eval_prefix_not_expression(right))
     }
 }
 
-impl Evaluable for &BooleanExpression {
-    fn evaluate(&self, env: &mut Environment) -> Result<Object> {
-        Ok(Boolean::new_boolean_object(self.value()))
-    }
-}
-
-impl Evaluable for &PrefixExpression {
-    fn evaluate(&self, env: &mut Environment) -> Result<Object> {
-        let value = self.right().evaluate(env)?;
-        match self.operator() {
-            PrefixOperator::Minus => Ok(eval_prefix_neg_expression(value)),
-            PrefixOperator::Not => Ok(eval_prefix_not_expression(value))
-        }
-
-    }
-}
-
-fn eval_prefix_not_expression(expression: Object) -> Object {
-    match expression.kind() {
+fn eval_prefix_not_expression(value: &Object) -> Object {
+    match value.kind() {
         ObjectKind::Integer(integer) => Boolean::new_boolean_object(integer.value == 0),
         ObjectKind::Boolean(boolean) => Boolean::new_boolean_object(!(*boolean.value())),
         ObjectKind::Null(_) => Boolean::new_boolean_object(false),
     }
 }
 
-fn eval_prefix_neg_expression(expression: Object) -> Object {
-    match expression.kind() {
+fn eval_prefix_neg_expression(value: &Object) -> Object {
+    match value.kind() {
         ObjectKind::Integer(integer) => Integer::new_integer_object(-(*integer.value())),
         _ => Null::new_null_object()
     }
+}
+
+fn evaluate_infix_expression(operator: InfixOperator, left: &Object, right: &Object) -> Result<Object> {
+    match (left.kind(), right.kind()) {
+        (ObjectKind::Integer(a), ObjectKind::Integer(b)) => evaluate_integer_infix_expression(operator, a, b),
+        other => panic!("cannot operate on {:?}", other),
+    }
+}
+
+fn evaluate_integer_infix_expression(operator: InfixOperator, left: &Integer, right: &Integer) -> Result<Object> {
+    Ok(match operator {
+        InfixOperator::Add => Integer::new_integer_object(left.value + right.value),
+        InfixOperator::Subtract => Integer::new_integer_object(left.value - right.value),
+        InfixOperator::Multiply => Integer::new_integer_object(left.value * right.value),
+        InfixOperator::Divide => Integer::new_integer_object(left.value / right.value),
+        InfixOperator::GreaterThan => Boolean::new_boolean_object(left.value > right.value),
+        InfixOperator::LessThan => Boolean::new_boolean_object(left.value < right.value),
+        InfixOperator::Equals => Boolean::new_boolean_object(left.value == right.value),
+        InfixOperator::NotEquals => Boolean::new_boolean_object(left.value != right.value)
+    })
 }
 
 
@@ -174,7 +194,18 @@ mod tests {
             ("5", Value::Integer(5i64)),
             ("10", Value::Integer(10)),
             ("-5", Value::Integer(-5)),
-            ("-10", Value::Integer(-10))
+            ("-10", Value::Integer(-10)),
+            ("5 + 5 + 5 + 5 - 10", Value::Integer(10)),
+            ("2 * 2 * 2 * 2 * 2", Value::Integer(32)),
+            ("-50 + 100 + -50", Value::Integer(0)),
+            ("5 * 2 + 10", Value::Integer(20)),
+            ("5 + 2 * 10", Value::Integer(25)),
+            ("20 + 2 * -10", Value::Integer(0)),
+            ("50 / 2 * 2 + 10", Value::Integer(60)),
+            ("2 * (5 + 10)", Value::Integer(30)),
+            ("3 * 3 * 3 + 10", Value::Integer(37)),
+            ("3 * (3 * 3) + 10", Value::Integer(37)),
+            ("(5 + 10 * 2 + 15 / 3) * 2 + -10", Value::Integer(50)),
         ];
 
         test_evaluated_value(tests)
@@ -199,6 +230,14 @@ mod tests {
             ("!!true", Value::Boolean(true)),
             ("!!false", Value::Boolean(false)),
             ("!!5", Value::Boolean(true)),
+            ("1 < 2", Value::Boolean(true)),
+            ("1 > 2", Value::Boolean(false)),
+            ("1 < 1", Value::Boolean(false)),
+            ("1 > 1", Value::Boolean(false)),
+            ("1 == 1", Value::Boolean(true)),
+            ("1 != 1", Value::Boolean(false)),
+            ("1 == 2", Value::Boolean(false)),
+            ("1 != 2", Value::Boolean(true)),
         ];
 
         test_evaluated_value(tests)
