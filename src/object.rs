@@ -1,7 +1,8 @@
-use std::fmt::{self, Display, Formatter};
+use std::fmt::{self, Debug, Display, Formatter};
 use std::rc::Rc;
 
 use lazy_static::lazy_static;
+use std::mem;
 
 const TRUE: bool = true;
 const FALSE: bool = false;
@@ -9,16 +10,22 @@ const NULL: NullValue = NullValue;
 
 #[derive(Debug)]
 pub struct Object {
-    kind: ObjectKind
+    kind: ObjectKind,
 }
 
 impl Object {
     pub fn new(kind: ObjectKind) -> Object {
-        Object{kind}
+        Object { kind }
     }
 
     pub fn kind(&self) -> &ObjectKind {
         &self.kind
+    }
+
+    /// Takes ownership of the Object.kind value, replacing the internal with Null.
+    /// Used with Return objects to allow the wrapped value to be extracted
+    pub fn kind_owned(&mut self) -> ObjectKind {
+        mem::replace(&mut self.kind, ObjectKind::Null(Null))
     }
 
     pub fn inspect(&self) -> String {
@@ -26,11 +33,26 @@ impl Object {
             ObjectKind::Integer(integer) => integer.inspect(),
             ObjectKind::Boolean(boolean) => boolean.inspect(),
             ObjectKind::Null(null) => null.inspect(),
+            ObjectKind::Return(rtrn) => rtrn.inspect(),
         }
     }
 }
 
-pub trait Inspectable<T> where T: Display {
+impl Display for Object {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match &self.kind {
+            ObjectKind::Integer(kind) => kind.fmt(f),
+            ObjectKind::Boolean(kind) => kind.fmt(f),
+            ObjectKind::Null(kind) => kind.fmt(f),
+            ObjectKind::Return(kind) => kind.fmt(f),
+        }
+    }
+}
+
+pub trait Inspectable<T>
+where
+    T: Display,
+{
     fn value(&self) -> &T;
 
     fn inspect(&self) -> String {
@@ -43,18 +65,17 @@ pub enum ObjectKind {
     Integer(Integer),
     Boolean(Boolean),
     Null(Null),
+    Return(Return),
 }
 
 #[derive(Debug)]
 pub struct Integer {
-    pub value: i64
+    value: i64,
 }
 
 impl Integer {
     pub fn new_integer_object(value: i64) -> Object {
-        Object::new(ObjectKind::Integer(Integer {
-            value
-        }))
+        Object::new(ObjectKind::Integer(Integer { value }))
     }
 }
 
@@ -110,5 +131,29 @@ impl Null {
 impl Inspectable<NullValue> for Null {
     fn value(&self) -> &NullValue {
         &NULL
+    }
+}
+
+#[derive(Debug)]
+pub struct Return {
+    value: Box<Object>,
+}
+
+impl Return {
+    pub fn new_return_object(value: Object) -> Object {
+        Object::new(ObjectKind::Return(Return {
+            value: Box::new(value),
+        }))
+    }
+
+    /// Consume this return value and extract the wrapped Object.
+    pub fn consume(mut self) -> Object {
+        *self.value
+    }
+}
+
+impl Inspectable<Object> for Return {
+    fn value(&self) -> &Object {
+        &self.value()
     }
 }

@@ -1,12 +1,12 @@
 use std::io::Write;
 use std::{error, io};
 
+use crate::ast::Program;
+use crate::evaluator::{Environment, Evaluable};
 use crate::lexer::IntoTokens;
+use crate::parser::{Error, Parser};
 use crate::source::ToSource;
 use core::result;
-use crate::parser::{Parser, Error};
-use crate::ast::Program;
-use crate::evaluator::{Evaluable, Environment};
 
 const PROMPT: &str = ">> ";
 
@@ -16,19 +16,17 @@ pub fn start(stdin: io::Stdin, stdout: &mut io::Stdout, stderr: &mut io::Stderr)
         write(stdout, PROMPT);
         match read(&stdin, &mut line) {
             Ok(_) => {
-                let mut parser = Parser::new(
-                    line.as_str().to_source().into_tokens()
-                );
+                let mut parser = Parser::new(line.as_str().to_source().into_tokens());
                 match parser.parse() {
                     Ok(program) => {
-                        let mut env = Environment{};
+                        let mut env = Environment {};
                         match program.evaluate(&mut env) {
                             Ok(object) => write(stdout, format!("{}\n", object.inspect()).as_str()),
                             Err(e) => write(stderr, format!("{:?}", e).as_str()),
                         }
                     }
                     //write(stdout, format!("{}\n", program).as_str()),
-                    Err(e) => write(stderr, format!("{}", e).as_str())
+                    Err(e) => write(stderr, format!("{}", e).as_str()),
                 }
                 line.clear();
             }

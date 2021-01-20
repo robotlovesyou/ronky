@@ -2,7 +2,7 @@ use crate::ast::*;
 use crate::lexer::*;
 use crate::token::*;
 use std::collections::HashMap;
-use std::fmt::{self, Display, Debug, Formatter};
+use std::fmt::{self, Debug, Display, Formatter};
 use std::iter::Peekable;
 use std::rc::Rc;
 use std::result;
@@ -39,9 +39,7 @@ pub struct ParseError {
 impl ParseError {
     fn new_parser_error(errors: Vec<Error>) -> Error {
         Error {
-            kind: ErrorKind::Parse(ParseError {
-                errors
-            }),
+            kind: ErrorKind::Parse(ParseError { errors }),
         }
     }
 }
@@ -140,7 +138,6 @@ impl Display for ErrorKind {
             ErrorKind::Statement(error) => display_error_message(f, error),
             ErrorKind::Expression(error) => display_error_message(f, error),
         }
-
     }
 }
 
@@ -346,10 +343,7 @@ impl Parser {
             })
     }
 
-    fn get_prefix_parse_fn(
-        &mut self,
-        token: &Token,
-    ) -> Result<ParsePrefixFn> {
+    fn get_prefix_parse_fn(&mut self, token: &Token) -> Result<ParsePrefixFn> {
         if let Some(f) = self.prefix_parse_fns.get(&token.kind.tag()) {
             Ok(f.clone())
         } else {
@@ -357,10 +351,7 @@ impl Parser {
         }
     }
 
-    fn get_infix_parse_fn(
-        &mut self,
-        token: &Token,
-    ) -> Result<ParseInfixFn> {
+    fn get_infix_parse_fn(&mut self, token: &Token) -> Result<ParseInfixFn> {
         if let Some(f) = self.infix_parse_fns.get(&token.kind.tag()) {
             Ok(f.clone())
         } else {
@@ -386,7 +377,9 @@ impl Parser {
     }
 
     fn parse_identifier_expression(&mut self, token: Token) -> Result<Expression> {
-        Ok(IdentifierExpression::new_identifier_expression(Identifier::new(token)))
+        Ok(IdentifierExpression::new_identifier_expression(
+            Identifier::new(token),
+        ))
     }
 
     fn parse_integer_literal_expression(&mut self, token: Token) -> Result<Expression> {
@@ -397,7 +390,9 @@ impl Parser {
             other => panic!("got {:?} expecting an Int", other),
         };
 
-        Ok(IntegerLiteralExpression::new_integer_literal_expression(token, value))
+        Ok(IntegerLiteralExpression::new_integer_literal_expression(
+            token, value,
+        ))
     }
 
     fn parse_boolean_literal_expression(&mut self, token: Token) -> Result<Expression> {
@@ -419,7 +414,9 @@ impl Parser {
 
         let next_token = self.expect_next(PARSING_A_PREFIX_EXPRESSION)?;
         let right = self.parse_expression(next_token, Precedence::Prefix)?;
-        Ok(PrefixExpression::new_prefix_expression(token, operator, right))
+        Ok(PrefixExpression::new_prefix_expression(
+            token, operator, right,
+        ))
     }
 
     fn parse_infix_expression(&mut self, left: Expression, token: Token) -> Result<Expression> {
@@ -487,7 +484,9 @@ impl Parser {
         let parameters = self.parse_function_parameters()?;
         let next_token = self.expect_peek_consume(Tag::LBrace, PARSING_A_FUNCTION_LITERAL)?;
         let body = self.parse_block_statement(next_token)?;
-        Ok(FunctionLiteralExpression::new_function_literal_expression(token, parameters, body))
+        Ok(FunctionLiteralExpression::new_function_literal_expression(
+            token, parameters, body,
+        ))
     }
 
     fn parse_function_parameters(&mut self) -> Result<Vec<Identifier>> {

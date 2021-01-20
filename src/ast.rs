@@ -347,7 +347,11 @@ pub struct FunctionLiteralExpression {
 }
 
 impl FunctionLiteralExpression {
-    pub fn new_function_literal_expression(token: Token, parameters: Vec<Identifier>, body: Statement) -> Expression {
+    pub fn new_function_literal_expression(
+        token: Token,
+        parameters: Vec<Identifier>,
+        body: Statement,
+    ) -> Expression {
         Expression::new(ExpressionKind::FunctionLiteral(FunctionLiteralExpression {
             token,
             parameters,
@@ -466,7 +470,11 @@ pub struct CallExpression {
 }
 
 impl CallExpression {
-    pub fn new_call_expression(token: Token, function: Expression, arguments: Vec<Expression>) -> Expression {
+    pub fn new_call_expression(
+        token: Token,
+        function: Expression,
+        arguments: Vec<Expression>,
+    ) -> Expression {
         Expression::new(ExpressionKind::Call(CallExpression {
             token,
             function: Box::new(function),
@@ -506,7 +514,11 @@ pub struct PrefixExpression {
 }
 
 impl PrefixExpression {
-    pub fn new_prefix_expression(token: Token, operator: PrefixOperator, right_expression: Expression) -> Expression {
+    pub fn new_prefix_expression(
+        token: Token,
+        operator: PrefixOperator,
+        right_expression: Expression,
+    ) -> Expression {
         Expression::new(ExpressionKind::Prefix(PrefixExpression {
             token,
             operator,
@@ -541,7 +553,11 @@ pub struct InfixExpression {
 }
 
 impl InfixExpression {
-    pub fn new_infix_expression(left: Expression, right: Expression, operator: InfixOperator) -> Expression {
+    pub fn new_infix_expression(
+        left: Expression,
+        right: Expression,
+        operator: InfixOperator,
+    ) -> Expression {
         Expression::new(ExpressionKind::Infix(InfixExpression {
             left: Box::new(left),
             right: Box::new(right),
