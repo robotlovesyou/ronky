@@ -1,5 +1,6 @@
 use crate::token::{Kind, Token};
 use std::fmt::{self, Display, Formatter};
+use crate::location::Location;
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum PrefixOperator {
@@ -136,12 +137,8 @@ impl Statement {
         &self.kind
     }
 
-    pub fn line(&self) -> usize {
-        self.kind.token().line
-    }
-
-    pub fn column(&self) -> usize {
-        self.kind.token().line
+    pub fn location(&self) -> Location {
+        self.token().location
     }
 }
 
@@ -207,12 +204,8 @@ impl Expression {
         &self.kind.token()
     }
 
-    pub fn line(&self) -> usize {
-        self.token().line
-    }
-
-    pub fn column(&self) -> usize {
-        self.token().column
+    pub fn location(&self) -> Location {
+        self.token().location
     }
 }
 
@@ -696,11 +689,11 @@ mod tests {
     #[test]
     #[should_panic]
     fn panics_constructing_an_identifier_with_a_non_ident_token() {
-        Identifier::new(Token::new(0, 0, Kind::RParen));
+        Identifier::new(Token::new(Location::default(), Kind::RParen));
     }
 
     #[test]
     fn can_construct_an_identifier() {
-        Identifier::new(Token::new(0, 0, Kind::Ident("abc".to_string())));
+        Identifier::new(Token::new(Location::default(), Kind::Ident("abc".to_string())));
     }
 }

@@ -1,13 +1,14 @@
+use crate::location::Location;
+
 #[derive(Copy, Clone)]
 pub struct SourceChar {
     pub repr: char,
-    pub line: usize,
-    pub column: usize,
+    pub location: Location
 }
 
 impl SourceChar {
     pub fn new(line: usize, column: usize, repr: char) -> SourceChar {
-        SourceChar { line, column, repr }
+        SourceChar { repr, location: Location::new(line, column) }
     }
 }
 
@@ -78,32 +79,28 @@ mod tests {
         assert!(matches!(
             iter.next(),
             Some(SourceChar {
-                line: 1,
-                column: 1,
+                location: Location(1,1),
                 repr: 'a'
             })
         ));
         assert!(matches!(
             iter.next(),
             Some(SourceChar {
-                line: 1,
-                column: 2,
+                location: Location(1,2),
                 repr: 'b'
             })
         ));
         assert!(matches!(
             iter.next(),
             Some(SourceChar {
-                line: 2,
-                column: 1,
+                location: Location(2,1),
                 repr: 'c'
             })
         ));
         assert!(matches!(
             iter.next(),
             Some(SourceChar {
-                line: 2,
-                column: 2,
+                location: Location(2,2),
                 repr: 'd'
             })
         ));

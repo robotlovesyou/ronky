@@ -70,12 +70,11 @@ impl StatementError {
         Error {
             kind: ErrorKind::Statement(StatementError {
                 message: format!(
-                    "got an {} instead of an {} while {} at line {} column {}",
+                    "got an {} instead of an {} while {} at {}",
                     got.kind.tag(),
                     expected,
                     action,
-                    got.line,
-                    got.column,
+                    got.location,
                 ),
             }),
         }
@@ -106,8 +105,8 @@ impl ExpressionError {
         Error {
             kind: ErrorKind::Expression(ExpressionError {
                 message: format!(
-                    "unexpected '{}' at line {} column {}",
-                    token, token.line, token.column
+                    "unexpected '{}' at {}",
+                    token, token.location
                 ),
             }),
         }

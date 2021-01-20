@@ -1,4 +1,5 @@
 use std::fmt::{self, Formatter};
+use crate::location::Location;
 
 #[derive(Eq, PartialEq, Debug)]
 pub enum Kind {
@@ -179,14 +180,13 @@ impl std::fmt::Display for Tag {
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct Token {
-    pub line: usize,
-    pub column: usize,
+    pub location: Location,
     pub kind: Kind,
 }
 
 impl Token {
-    pub fn new(line: usize, column: usize, kind: Kind) -> Token {
-        Token { line, column, kind }
+    pub fn new(location: Location, kind: Kind) -> Token {
+        Token { location, kind }
     }
 }
 

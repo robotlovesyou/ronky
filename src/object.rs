@@ -3,6 +3,7 @@ use std::rc::Rc;
 
 use lazy_static::lazy_static;
 use std::mem;
+use crate::location::Location;
 
 const TRUE: bool = true;
 const FALSE: bool = false;
@@ -11,25 +12,20 @@ const NULL: NullValue = NullValue;
 #[derive(Debug)]
 pub struct Object {
     kind: ObjectKind,
-    line: usize,
-    column: usize,
+    location: Location
 }
 
 impl Object {
-    pub fn new(kind: ObjectKind, line: usize, column: usize) -> Object {
-        Object { kind, line, column }
+    pub fn new(kind: ObjectKind, location: Location) -> Object {
+        Object { kind, location }
     }
 
     pub fn kind(&self) -> &ObjectKind {
         &self.kind
     }
 
-    pub fn line(&self) -> usize {
-        self.line
-    }
-
-    pub fn column(&self) -> usize {
-        self.column
+    pub fn location(&self) -> Location {
+        self.location
     }
 
     /// Takes ownership of the Object.kind value, replacing the internal with Null.
@@ -84,8 +80,8 @@ pub struct Integer {
 }
 
 impl Integer {
-    pub fn new_integer_object(value: i64, line: usize, column: usize) -> Object {
-        Object::new(ObjectKind::Integer(Integer { value }), line, column)
+    pub fn new_integer_object(value: i64, location: Location) -> Object {
+        Object::new(ObjectKind::Integer(Integer { value }), location)
     }
 }
 
@@ -102,12 +98,12 @@ pub enum Boolean {
 }
 
 impl Boolean {
-    pub fn new_boolean_object(value: bool, line: usize, column: usize) -> Object {
+    pub fn new_boolean_object(value: bool, location: Location) -> Object {
         let kind = match value {
             true => Boolean::True,
             false => Boolean::False,
         };
-        Object::new(ObjectKind::Boolean(kind), line, column)
+        Object::new(ObjectKind::Boolean(kind), location)
     }
 }
 
@@ -133,8 +129,8 @@ impl Display for NullValue {
 pub struct Null;
 
 impl Null {
-    pub fn new_null_object(line: usize, column: usize) -> Object {
-        Object::new(ObjectKind::Null(Null), line, column)
+    pub fn new_null_object(location: Location) -> Object {
+        Object::new(ObjectKind::Null(Null), location)
     }
 }
 
@@ -150,10 +146,10 @@ pub struct Return {
 }
 
 impl Return {
-    pub fn new_return_object(value: Object, line: usize, column: usize) -> Object {
+    pub fn new_return_object(value: Object, location: Location) -> Object {
         Object::new(ObjectKind::Return(Return {
             value: Box::new(value),
-        }), line, column)
+        }), location)
     }
 
     /// Consume this return value and extract the wrapped Object.
