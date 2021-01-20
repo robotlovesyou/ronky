@@ -8,6 +8,7 @@ use crate::ast::{
 use crate::object::{Boolean, Inspectable, Integer, Null, Object, ObjectKind, Return};
 use crate::parser;
 use std::borrow::Borrow;
+use std::os::macos::raw::stat;
 
 #[derive(Debug)]
 pub struct Error {
@@ -40,7 +41,31 @@ pub enum ErrorKind {
 
 type Result<T> = result::Result<T, Error>;
 
-pub struct Environment {}
+pub struct Environment {
+    line: usize,
+    column: usize,
+}
+
+impl Default for Environment {
+    fn default() -> Self {
+        Environment {line: 0, column: 0}
+    }
+}
+
+impl Environment {
+    fn set_location(&mut self, line: usize, column: usize) {
+        self.line = line;
+        self.column = column;
+    }
+
+    fn line(&self) -> usize {
+        self.line
+    }
+
+    fn column(&self) -> usize {
+        self.column
+    }
+}
 
 pub trait Evaluable {
     fn evaluate(&self, env: &mut Environment) -> Result<Object>;
@@ -48,8 +73,9 @@ pub trait Evaluable {
 
 impl Evaluable for Program {
     fn evaluate(&self, env: &mut Environment) -> Result<Object> {
-        let mut result = Null::new_null_object();
+        let mut result = Null::new_null_object(1, 1);
         'evaluation: for statement in self.statements().iter() {
+            env.set_location(statement.line(), statement.column());
             result = statement.evaluate(env)?;
             if let ObjectKind::Return(_) = result.kind() {
                 if let ObjectKind::Return(ret) = result.kind_owned() {
@@ -64,8 +90,9 @@ impl Evaluable for Program {
 
 impl Evaluable for &[Statement] {
     fn evaluate(&self, env: &mut Environment) -> Result<Object> {
-        let mut result = Null::new_null_object();
+        let mut result = Null::new_null_object(env.line(), env.column());
         'evaluation: for statement in self.iter() {
+            env.set_location(statement.line(), statement.column());
             result = statement.evaluate(env)?;
             if matches!(result.kind(), ObjectKind::Return(_)) {
                 break 'evaluation;
@@ -81,7 +108,7 @@ impl Evaluable for &Statement {
             StatementKind::Let(_) => unimplemented!(),
             StatementKind::Return(kind) => {
                 let value = kind.value().evaluate(env)?;
-                Ok(Return::new_return_object(value))
+                Ok(Return::new_return_object(value, env.line(), env.column()))
             }
             StatementKind::Expression(kind) => kind.evaluate(env),
             StatementKind::Block(kind) => kind.statements().evaluate(env),
@@ -97,18 +124,19 @@ impl Evaluable for &ExpressionStatement {
 
 impl Evaluable for &Expression {
     fn evaluate(&self, env: &mut Environment) -> Result<Object> {
+        env.set_location(self.line(), self.column());
         match self.kind() {
-            ExpressionKind::Boolean(kind) => evaluate_bool_literal_expresson(kind),
+            ExpressionKind::Boolean(kind) => evaluate_bool_literal_expresson(kind, env),
             ExpressionKind::Identifier(_) => unimplemented!(),
-            ExpressionKind::IntegerLiteral(kind) => evaluate_integer_literal_expression(kind),
+            ExpressionKind::IntegerLiteral(kind) => evaluate_integer_literal_expression(kind, env),
             ExpressionKind::Prefix(kind) => {
                 let right = kind.right().evaluate(env)?;
-                evaluate_prefix_expression(kind.operator(), &right)
+                evaluate_prefix_expression(kind.operator(), &right, env)
             }
             ExpressionKind::Infix(kind) => {
                 let left = kind.left().evaluate(env)?;
                 let right = kind.right().evaluate(env)?;
-                evaluate_infix_expression(kind.operator(), &left, &right)
+                evaluate_infix_expression(kind.operator(), &left, &right, env)
             }
             ExpressionKind::If(kind) => evaluate_if_expression(kind, env),
             ExpressionKind::FunctionLiteral(_) => unimplemented!(),
@@ -117,35 +145,35 @@ impl Evaluable for &Expression {
     }
 }
 
-fn evaluate_integer_literal_expression(expression: &IntegerLiteralExpression) -> Result<Object> {
-    Ok(Integer::new_integer_object(expression.value()))
+fn evaluate_integer_literal_expression(expression: &IntegerLiteralExpression, env: &mut Environment) -> Result<Object> {
+    Ok(Integer::new_integer_object(expression.value(), env.line(), env.column()))
 }
 
-fn evaluate_bool_literal_expresson(expression: &BooleanExpression) -> Result<Object> {
-    Ok(Boolean::new_boolean_object(expression.value()))
+fn evaluate_bool_literal_expresson(expression: &BooleanExpression, env: &mut Environment) -> Result<Object> {
+    Ok(Boolean::new_boolean_object(expression.value(), env.line(), env.column()))
 }
 
-fn evaluate_prefix_expression(operator: PrefixOperator, right: &Object) -> Result<Object> {
+fn evaluate_prefix_expression(operator: PrefixOperator, right: &Object, env: &mut Environment) -> Result<Object> {
     match operator {
-        PrefixOperator::Minus => Ok(eval_prefix_neg_expression(right)),
-        PrefixOperator::Not => Ok(eval_prefix_not_expression(right)),
+        PrefixOperator::Minus => Ok(eval_prefix_neg_expression(right, env)),
+        PrefixOperator::Not => Ok(eval_prefix_not_expression(right, env)),
     }
 }
 
-fn eval_prefix_not_expression(value: &Object) -> Object {
+fn eval_prefix_not_expression(value: &Object, env: &mut Environment) -> Object {
     match value.kind() {
-        ObjectKind::Integer(integer) => Boolean::new_boolean_object(*integer.value() == 0),
-        ObjectKind::Boolean(boolean) => Boolean::new_boolean_object(!(*boolean.value())),
-        ObjectKind::Null(_) => Boolean::new_boolean_object(false),
+        ObjectKind::Integer(integer) => Boolean::new_boolean_object(*integer.value() == 0, env.line(), env.column()),
+        ObjectKind::Boolean(boolean) => Boolean::new_boolean_object(!(*boolean.value()), env.line(), env.column()),
+        ObjectKind::Null(_) => Boolean::new_boolean_object(false, env.line(), env.column()),
         // TODO: This should raise an error
         other => panic!("{:?} cannot have a ! operation applied to it", other),
     }
 }
 
-fn eval_prefix_neg_expression(value: &Object) -> Object {
+fn eval_prefix_neg_expression(value: &Object, env: &mut Environment) -> Object {
     match value.kind() {
-        ObjectKind::Integer(integer) => Integer::new_integer_object(-(*integer.value())),
-        _ => Null::new_null_object(),
+        ObjectKind::Integer(integer) => Integer::new_integer_object(-(*integer.value()), env.line(), env.column()),
+        _ => Null::new_null_object(env.line(), env.column()),
     }
 }
 
@@ -153,13 +181,14 @@ fn evaluate_infix_expression(
     operator: InfixOperator,
     left: &Object,
     right: &Object,
+    env: &mut Environment
 ) -> Result<Object> {
     match (left.kind(), right.kind()) {
         (ObjectKind::Integer(a), ObjectKind::Integer(b)) => {
-            evaluate_integer_infix_expression(operator, a, b)
+            evaluate_integer_infix_expression(operator, a, b, env)
         }
         (ObjectKind::Boolean(a), ObjectKind::Boolean(b)) => {
-            evaluate_boolean_infix_expression(operator, a, b)
+            evaluate_boolean_infix_expression(operator, a, b, env)
         }
         // TODO: this should raise an error, not panic
         other => panic!("cannot operate on {:?}", other),
@@ -170,16 +199,17 @@ fn evaluate_integer_infix_expression(
     operator: InfixOperator,
     left: &Integer,
     right: &Integer,
+    env: &mut Environment
 ) -> Result<Object> {
     Ok(match operator {
-        InfixOperator::Add => Integer::new_integer_object(left.value() + right.value()),
-        InfixOperator::Subtract => Integer::new_integer_object(left.value() - right.value()),
-        InfixOperator::Multiply => Integer::new_integer_object(left.value() * right.value()),
-        InfixOperator::Divide => Integer::new_integer_object(left.value() / right.value()),
-        InfixOperator::GreaterThan => Boolean::new_boolean_object(left.value() > right.value()),
-        InfixOperator::LessThan => Boolean::new_boolean_object(left.value() < right.value()),
-        InfixOperator::Equals => Boolean::new_boolean_object(left.value() == right.value()),
-        InfixOperator::NotEquals => Boolean::new_boolean_object(left.value() != right.value()),
+        InfixOperator::Add => Integer::new_integer_object(left.value() + right.value(), env.line(), env.column()),
+        InfixOperator::Subtract => Integer::new_integer_object(left.value() - right.value(), env.line(), env.column()),
+        InfixOperator::Multiply => Integer::new_integer_object(left.value() * right.value(), env.line(), env.column()),
+        InfixOperator::Divide => Integer::new_integer_object(left.value() / right.value(), env.line(), env.column()),
+        InfixOperator::GreaterThan => Boolean::new_boolean_object(left.value() > right.value(), env.line(), env.column()),
+        InfixOperator::LessThan => Boolean::new_boolean_object(left.value() < right.value(), env.line(), env.column()),
+        InfixOperator::Equals => Boolean::new_boolean_object(left.value() == right.value(), env.line(), env.column()),
+        InfixOperator::NotEquals => Boolean::new_boolean_object(left.value() != right.value(), env.line(), env.column()),
     })
 }
 
@@ -187,10 +217,11 @@ fn evaluate_boolean_infix_expression(
     operator: InfixOperator,
     left: &Boolean,
     right: &Boolean,
+    env: &mut Environment
 ) -> Result<Object> {
     Ok(match operator {
-        InfixOperator::Equals => Boolean::new_boolean_object(left.value() == right.value()),
-        InfixOperator::NotEquals => Boolean::new_boolean_object(left.value() != right.value()),
+        InfixOperator::Equals => Boolean::new_boolean_object(left.value() == right.value(), env.line(), env.column()),
+        InfixOperator::NotEquals => Boolean::new_boolean_object(left.value() != right.value(), env.line(), env.column()),
         // TODO: this should raise an error, not panic
         other => panic!("{:?} is not a valid boolean operation", other),
     })
@@ -201,10 +232,11 @@ fn evaluate_if_expression(expression: &IfExpression, env: &mut Environment) -> R
     if is_truthy(&condition) {
         expression.consequence().evaluate(env)
     } else {
-        expression.alternative().as_ref().map_or_else(
-            || Ok(Null::new_null_object()),
-            |alternative| alternative.evaluate(env),
-        )
+        if let Some(alternative) = expression.alternative() {
+            alternative.evaluate(env)
+        } else {
+            Ok(Null::new_null_object(env.line(), env.column()))
+        }
     }
 }
 
@@ -261,7 +293,7 @@ mod tests {
     fn test_evaluated_value(tests: Vec<(&str, Value)>) -> Result<()> {
         for (source, expected) in tests {
             let program = program_from_source(source)?;
-            let mut env = Environment {};
+            let mut env = Environment::default();
             let evaluated = program.evaluate(&mut env)?;
             test_value(evaluated, expected, source);
         }

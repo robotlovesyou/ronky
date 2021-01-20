@@ -127,12 +127,21 @@ impl Statement {
             kind: Box::new(kind),
         }
     }
+
     pub fn token(&self) -> &Token {
         &self.kind.token()
     }
 
     pub fn kind(&self) -> &StatementKind {
         &self.kind
+    }
+
+    pub fn line(&self) -> usize {
+        self.kind.token().line
+    }
+
+    pub fn column(&self) -> usize {
+        self.kind.token().line
     }
 }
 
@@ -196,6 +205,14 @@ impl Expression {
 
     pub fn token(&self) -> &Token {
         &self.kind.token()
+    }
+
+    pub fn line(&self) -> usize {
+        self.token().line
+    }
+
+    pub fn column(&self) -> usize {
+        self.token().column
     }
 }
 

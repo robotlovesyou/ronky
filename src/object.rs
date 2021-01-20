@@ -11,15 +11,25 @@ const NULL: NullValue = NullValue;
 #[derive(Debug)]
 pub struct Object {
     kind: ObjectKind,
+    line: usize,
+    column: usize,
 }
 
 impl Object {
-    pub fn new(kind: ObjectKind) -> Object {
-        Object { kind }
+    pub fn new(kind: ObjectKind, line: usize, column: usize) -> Object {
+        Object { kind, line, column }
     }
 
     pub fn kind(&self) -> &ObjectKind {
         &self.kind
+    }
+
+    pub fn line(&self) -> usize {
+        self.line
+    }
+
+    pub fn column(&self) -> usize {
+        self.column
     }
 
     /// Takes ownership of the Object.kind value, replacing the internal with Null.
@@ -74,8 +84,8 @@ pub struct Integer {
 }
 
 impl Integer {
-    pub fn new_integer_object(value: i64) -> Object {
-        Object::new(ObjectKind::Integer(Integer { value }))
+    pub fn new_integer_object(value: i64, line: usize, column: usize) -> Object {
+        Object::new(ObjectKind::Integer(Integer { value }), line, column)
     }
 }
 
@@ -92,12 +102,12 @@ pub enum Boolean {
 }
 
 impl Boolean {
-    pub fn new_boolean_object(value: bool) -> Object {
+    pub fn new_boolean_object(value: bool, line: usize, column: usize) -> Object {
         let kind = match value {
             true => Boolean::True,
             false => Boolean::False,
         };
-        Object::new(ObjectKind::Boolean(kind))
+        Object::new(ObjectKind::Boolean(kind), line, column)
     }
 }
 
@@ -123,8 +133,8 @@ impl Display for NullValue {
 pub struct Null;
 
 impl Null {
-    pub fn new_null_object() -> Object {
-        Object::new(ObjectKind::Null(Null))
+    pub fn new_null_object(line: usize, column: usize) -> Object {
+        Object::new(ObjectKind::Null(Null), line, column)
     }
 }
 
@@ -140,10 +150,10 @@ pub struct Return {
 }
 
 impl Return {
-    pub fn new_return_object(value: Object) -> Object {
+    pub fn new_return_object(value: Object, line: usize, column: usize) -> Object {
         Object::new(ObjectKind::Return(Return {
             value: Box::new(value),
-        }))
+        }), line, column)
     }
 
     /// Consume this return value and extract the wrapped Object.

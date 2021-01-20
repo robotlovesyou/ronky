@@ -19,7 +19,7 @@ pub fn start(stdin: io::Stdin, stdout: &mut io::Stdout, stderr: &mut io::Stderr)
                 let mut parser = Parser::new(line.as_str().to_source().into_tokens());
                 match parser.parse() {
                     Ok(program) => {
-                        let mut env = Environment {};
+                        let mut env = Environment::default();
                         match program.evaluate(&mut env) {
                             Ok(object) => write(stdout, format!("{}\n", object.inspect()).as_str()),
                             Err(e) => write(stderr, format!("{:?}", e).as_str()),
