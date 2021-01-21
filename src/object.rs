@@ -10,6 +10,25 @@ const FALSE: bool = false;
 const NULL: NullValue = NullValue;
 
 #[derive(Debug)]
+pub struct Error {
+    message: String,
+}
+
+impl Error {
+    fn new(message: String) -> Error {
+        Error { message }
+    }
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "Object Error: {}", self.message)
+    }
+}
+
+type Result<T> = std::result::Result<T, Error>;
+
+#[derive(Debug)]
 pub struct Object {
     kind: ObjectKind,
     location: Location,
@@ -30,8 +49,9 @@ impl Object {
 
     /// Takes ownership of the Object.kind value, replacing the internal with Null.
     /// Used with Return objects to allow the wrapped value to be extracted
-    pub fn kind_owned(&mut self) -> ObjectKind {
-        mem::replace(&mut self.kind, ObjectKind::Null(Null))
+    pub fn try_kind_owned(&mut self) -> Result<ObjectKind> {
+        // TODO this should fail if trying to take ownership of a ref kind
+        Ok(mem::replace(&mut self.kind, ObjectKind::Null(Null)))
     }
 
     pub fn inspect(&self) -> String {
@@ -72,6 +92,17 @@ pub enum ObjectKind {
     Boolean(Boolean),
     Null(Null),
     Return(Return),
+}
+
+impl ObjectKind {
+    pub fn name(&self) -> &'static str {
+        match &self {
+            ObjectKind::Integer(_) => "Integer",
+            ObjectKind::Boolean(_) => "Boolean",
+            ObjectKind::Null(_) => "Null",
+            ObjectKind::Return(_) => "Return",
+        }
+    }
 }
 
 #[derive(Debug)]

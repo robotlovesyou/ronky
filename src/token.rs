@@ -72,42 +72,37 @@ impl Kind {
     }
 }
 
-// impl std::string::ToString for Kind {
-//     fn to_string(&self) -> String {
-//         self.tag().to_string()
-//     }
-// }
-
 impl fmt::Display for Kind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         use self::Kind::*;
-        let display = match self {
-            Illegal(ref illegal) => illegal.to_string(),
-            Ident(ref ident) => ident.to_string(),
-            Int(repr) => repr.to_string(),
-            Assign => "=".to_string(),
-            Plus => "+".to_string(),
-            Minus => "-".to_string(),
-            Bang => "!".to_string(),
-            Asterisk => "*".to_string(),
-            Slash => "/".to_string(),
-            LT => "<".to_string(),
-            GT => ">".to_string(),
-            EQ => "==".to_string(),
-            NotEQ => "!=".to_string(),
-            Comma => ",".to_string(),
-            Semicolon => ";".to_string(),
-            LParen => "(".to_string(),
-            RParen => ")".to_string(),
-            LBrace => "{".to_string(),
-            RBrace => "}".to_string(),
-            Function => "fn".to_string(),
-            Let => "let".to_string(),
-            True => "true".to_string(),
-            False => "false".to_string(),
-            If => "if".to_string(),
-            Else => "else".to_string(),
-            Return => "return".to_string(),
+        let mut char_buffer = [0; 4];
+        let display: &str = match self {
+            Illegal(ref illegal) => illegal.encode_utf8(&mut char_buffer),
+            Ident(ref ident) => &ident,
+            Int(repr) => &repr,
+            Assign => "=",
+            Plus => "+",
+            Minus => "-",
+            Bang => "!",
+            Asterisk => "*",
+            Slash => "/",
+            LT => "<",
+            GT => ">",
+            EQ => "==",
+            NotEQ => "!=",
+            Comma => ",",
+            Semicolon => ";",
+            LParen => "(",
+            RParen => ")",
+            LBrace => "{",
+            RBrace => "}",
+            Function => "fn",
+            Let => "let",
+            True => "true",
+            False => "false",
+            If => "if",
+            Else => "else",
+            Return => "return",
         };
         write!(f, "{}", display)
     }

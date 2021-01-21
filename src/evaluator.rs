@@ -6,9 +6,10 @@ use crate::ast::{
     StatementKind,
 };
 use crate::location::Location;
-use crate::object::{Boolean, Inspectable, Integer, Null, Object, ObjectKind, Return};
+use crate::object::{self, Boolean, Inspectable, Integer, Null, Object, ObjectKind, Return};
 use crate::parser;
 use std::borrow::Borrow;
+use std::fmt::{self, Debug, Display, Formatter};
 use std::os::macos::raw::stat;
 
 #[derive(Debug)]
@@ -22,6 +23,12 @@ impl Error {
     }
 }
 
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.kind)
+    }
+}
+
 #[derive(Debug)]
 pub struct ParserError {
     message: String,
@@ -30,14 +37,53 @@ pub struct ParserError {
 impl ParserError {
     fn new_parser_error(e: parser::Error) -> Error {
         Error::new(ErrorKind::Parser(ParserError {
-            message: format!("{}", e),
+            message: format!("parser error: {}", e),
         }))
+    }
+}
+
+impl Display for ParserError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "Error: {}", self.message)
+    }
+}
+
+#[derive(Debug)]
+pub struct EvaluationError {
+    message: String,
+}
+
+impl EvaluationError {
+    fn new_evaluation_error(message: String) -> Error {
+        Error::new(ErrorKind::Evaluation(EvaluationError { message }))
+    }
+}
+
+impl Display for EvaluationError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "Error: {}", self.message)
+    }
+}
+
+impl From<object::Error> for Error {
+    fn from(e: object::Error) -> Self {
+        EvaluationError::new_evaluation_error(format!("{}", e))
     }
 }
 
 #[derive(Debug)]
 pub enum ErrorKind {
     Parser(ParserError),
+    Evaluation(EvaluationError),
+}
+
+impl Display for ErrorKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match &self {
+            ErrorKind::Parser(kind) => write!(f, "{}", kind),
+            ErrorKind::Evaluation(kind) => write!(f, "{}", kind),
+        }
+    }
 }
 
 type Result<T> = result::Result<T, Error>;
@@ -84,10 +130,11 @@ impl Evaluable for Program {
             env.set_location(statement.location());
             result = statement.evaluate(env)?;
             if let ObjectKind::Return(_) = result.kind() {
-                if let ObjectKind::Return(ret) = result.kind_owned() {
+                if let ObjectKind::Return(ret) = result.try_kind_owned()? {
                     result = ret.consume();
                     break 'evaluation;
                 }
+                unreachable!();
             }
         }
         Ok(result)
@@ -176,27 +223,38 @@ fn evaluate_prefix_expression(
     location: Location,
 ) -> Result<Object> {
     match operator {
-        PrefixOperator::Minus => Ok(eval_prefix_neg_expression(right, location)),
-        PrefixOperator::Not => Ok(eval_prefix_not_expression(right, location)),
+        PrefixOperator::Minus => eval_prefix_neg_expression(right, location),
+        PrefixOperator::Not => eval_prefix_not_expression(right, location),
     }
 }
 
-fn eval_prefix_not_expression(value: &Object, location: Location) -> Object {
+fn eval_prefix_not_expression(value: &Object, location: Location) -> Result<Object> {
     match value.kind() {
         ObjectKind::Integer(integer) => {
-            Boolean::new_boolean_object(*integer.value() == 0, location)
+            Ok(Boolean::new_boolean_object(*integer.value() == 0, location))
         }
-        ObjectKind::Boolean(boolean) => Boolean::new_boolean_object(!(*boolean.value()), location),
-        ObjectKind::Null(_) => Boolean::new_boolean_object(false, location),
-        // TODO: This should raise an error
-        other => panic!("{:?} cannot have a ! operation applied to it", other),
+        ObjectKind::Boolean(boolean) => {
+            Ok(Boolean::new_boolean_object(!(*boolean.value()), location))
+        }
+        ObjectKind::Null(_) => Ok(Boolean::new_boolean_object(false, location)),
+        _ => Err(EvaluationError::new_evaluation_error(format!(
+            "unknown operator: {} {}",
+            PrefixOperator::Not,
+            value.kind().name()
+        ))),
     }
 }
 
-fn eval_prefix_neg_expression(value: &Object, location: Location) -> Object {
+fn eval_prefix_neg_expression(value: &Object, location: Location) -> Result<Object> {
     match value.kind() {
-        ObjectKind::Integer(integer) => Integer::new_integer_object(-(*integer.value()), location),
-        _ => Null::new_null_object(location),
+        ObjectKind::Integer(integer) => {
+            Ok(Integer::new_integer_object(-(*integer.value()), location))
+        }
+        _ => Err(EvaluationError::new_evaluation_error(format!(
+            "unknown operator: {} {}",
+            PrefixOperator::Minus,
+            value.kind().name()
+        ))),
     }
 }
 
@@ -213,8 +271,12 @@ fn evaluate_infix_expression(
         (ObjectKind::Boolean(a), ObjectKind::Boolean(b)) => {
             evaluate_boolean_infix_expression(operator, a, b, location)
         }
-        // TODO: this should raise an error, not panic
-        other => panic!("cannot operate on {:?}", other),
+        _ => Err(EvaluationError::new_evaluation_error(format!(
+            "type mismatch: {} {} {}",
+            left.kind().name(),
+            operator,
+            right.kind().name()
+        ))),
     }
 }
 
@@ -256,16 +318,20 @@ fn evaluate_boolean_infix_expression(
     right: &Boolean,
     location: Location,
 ) -> Result<Object> {
-    Ok(match operator {
-        InfixOperator::Equals => {
-            Boolean::new_boolean_object(left.value() == right.value(), location)
-        }
-        InfixOperator::NotEquals => {
-            Boolean::new_boolean_object(left.value() != right.value(), location)
-        }
-        // TODO: this should raise an error, not panic
-        other => panic!("{:?} is not a valid boolean operation", other),
-    })
+    match operator {
+        InfixOperator::Equals => Ok(Boolean::new_boolean_object(
+            left.value() == right.value(),
+            location,
+        )),
+        InfixOperator::NotEquals => Ok(Boolean::new_boolean_object(
+            left.value() != right.value(),
+            location,
+        )),
+        _ => Err(EvaluationError::new_evaluation_error(format!(
+            "unknown operator: Boolean {} Boolean",
+            operator
+        ))),
+    }
 }
 
 fn evaluate_if_expression(expression: &IfExpression, env: &mut Environment) -> Result<Object> {
@@ -440,5 +506,53 @@ mod tests {
         ];
 
         test_evaluated_value(tests)
+    }
+
+    #[test]
+    fn returns_expected_error_message() -> Result<()> {
+        let complex_1 = indoc! {"
+        if (10 > 1) {
+                if (10 > 1) {
+                    return true + false;
+                }
+
+                return 1;
+            }
+        "};
+
+        let tests = vec![
+            ("5 + true;", "Error: type mismatch: Integer + Boolean"),
+            ("5 + true; 5;", "Error: type mismatch: Integer + Boolean"),
+            ("-true", "Error: unknown operator: - Boolean"),
+            (
+                "true + false;",
+                "Error: unknown operator: Boolean + Boolean",
+            ),
+            (
+                "true + false + true + false;",
+                "Error: unknown operator: Boolean + Boolean",
+            ),
+            (
+                "5; true + false; 5",
+                "Error: unknown operator: Boolean + Boolean",
+            ),
+            (
+                "if (10 > 1) { true + false; }",
+                "Error: unknown operator: Boolean + Boolean",
+            ),
+            (complex_1, "Error: unknown operator: Boolean + Boolean"),
+        ];
+
+        for (source, error) in tests {
+            let program = program_from_source(source)?;
+            let mut env = Environment::default();
+            let result = program.evaluate(&mut env);
+            match result {
+                Ok(_) => panic!("program should fail to evaluate: `{}`", source),
+                Err(e) => assert_eq!(error, format!("{}", e).as_str()),
+            }
+        }
+
+        Ok(())
     }
 }
