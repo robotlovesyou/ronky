@@ -22,7 +22,7 @@ pub fn start(stdin: io::Stdin, stdout: &mut io::Stdout, stderr: &mut io::Stderr)
                         let mut env = Environment::default();
                         match program.evaluate(&mut env) {
                             Ok(object) => write(stdout, format!("{}\n", object.inspect()).as_str()),
-                            Err(e) => write(stderr, format!("{:?}", e).as_str()),
+                            Err(e) => write(stderr, format!("{}\n", e).as_str()),
                         }
                     }
                     //write(stdout, format!("{}\n", program).as_str()),
