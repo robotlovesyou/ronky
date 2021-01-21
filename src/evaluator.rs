@@ -238,9 +238,10 @@ fn eval_prefix_not_expression(value: &Object, location: Location) -> Result<Obje
         }
         ObjectKind::Null(_) => Ok(Boolean::new_boolean_object(false, location)),
         _ => Err(EvaluationError::new_evaluation_error(format!(
-            "unknown operator: {} {}",
+            "unknown operator: {} {} at {}",
             PrefixOperator::Not,
-            value.kind().name()
+            value.kind().name(),
+            location,
         ))),
     }
 }
@@ -251,9 +252,10 @@ fn eval_prefix_neg_expression(value: &Object, location: Location) -> Result<Obje
             Ok(Integer::new_integer_object(-(*integer.value()), location))
         }
         _ => Err(EvaluationError::new_evaluation_error(format!(
-            "unknown operator: {} {}",
+            "unknown operator: {} {} at {}",
             PrefixOperator::Minus,
-            value.kind().name()
+            value.kind().name(),
+            location,
         ))),
     }
 }
@@ -272,10 +274,11 @@ fn evaluate_infix_expression(
             evaluate_boolean_infix_expression(operator, a, b, location)
         }
         _ => Err(EvaluationError::new_evaluation_error(format!(
-            "type mismatch: {} {} {}",
+            "type mismatch: {} {} {} at {}",
             left.kind().name(),
             operator,
-            right.kind().name()
+            right.kind().name(),
+            location,
         ))),
     }
 }
@@ -328,15 +331,15 @@ fn evaluate_boolean_infix_expression(
             location,
         )),
         _ => Err(EvaluationError::new_evaluation_error(format!(
-            "unknown operator: Boolean {} Boolean",
-            operator
+            "unknown operator: Boolean {} Boolean at {}",
+            operator, location
         ))),
     }
 }
 
 fn evaluate_if_expression(expression: &IfExpression, env: &mut Environment) -> Result<Object> {
     let condition = expression.condition().evaluate(env)?;
-    if is_truthy(&condition) {
+    if is_truthy(&condition, expression.condition().location())? {
         expression.consequence().evaluate(env)
     } else {
         if let Some(alternative) = expression.alternative() {
@@ -347,12 +350,16 @@ fn evaluate_if_expression(expression: &IfExpression, env: &mut Environment) -> R
     }
 }
 
-fn is_truthy(object: &Object) -> bool {
+fn is_truthy(object: &Object, location: Location) -> Result<bool> {
     match object.kind() {
-        ObjectKind::Integer(kind) => *kind.value() != 0,
-        ObjectKind::Boolean(kind) => *kind.value(),
-        ObjectKind::Null(_) => false,
-        other => panic!("{:?} cannot be evaluated for truthiness", other),
+        ObjectKind::Integer(kind) => Ok(*kind.value() != 0),
+        ObjectKind::Boolean(kind) => Ok(*kind.value()),
+        ObjectKind::Null(_) => Ok(false),
+        _ => Err(EvaluationError::new_evaluation_error(format!(
+            "type mismatch; {} cannot be evaluated for truthiness at {}",
+            object.kind().name(),
+            location
+        ))),
     }
 }
 
@@ -521,26 +528,38 @@ mod tests {
         "};
 
         let tests = vec![
-            ("5 + true;", "Error: type mismatch: Integer + Boolean"),
-            ("5 + true; 5;", "Error: type mismatch: Integer + Boolean"),
-            ("-true", "Error: unknown operator: - Boolean"),
+            (
+                "5 + true;",
+                "Error: type mismatch: Integer + Boolean at line: 1 column: 1",
+            ),
+            (
+                "5 + true; 5;",
+                "Error: type mismatch: Integer + Boolean at line: 1 column: 1",
+            ),
+            (
+                "-true",
+                "Error: unknown operator: - Boolean at line: 1 column: 1",
+            ),
             (
                 "true + false;",
-                "Error: unknown operator: Boolean + Boolean",
+                "Error: unknown operator: Boolean + Boolean at line: 1 column: 1",
             ),
             (
                 "true + false + true + false;",
-                "Error: unknown operator: Boolean + Boolean",
+                "Error: unknown operator: Boolean + Boolean at line: 1 column: 1",
             ),
             (
                 "5; true + false; 5",
-                "Error: unknown operator: Boolean + Boolean",
+                "Error: unknown operator: Boolean + Boolean at line: 1 column: 4",
             ),
             (
                 "if (10 > 1) { true + false; }",
-                "Error: unknown operator: Boolean + Boolean",
+                "Error: unknown operator: Boolean + Boolean at line: 1 column: 15",
             ),
-            (complex_1, "Error: unknown operator: Boolean + Boolean"),
+            (
+                complex_1,
+                "Error: unknown operator: Boolean + Boolean at line: 3 column: 20",
+            ),
         ];
 
         for (source, error) in tests {
