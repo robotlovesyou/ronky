@@ -3,11 +3,12 @@ use crate::ast::{
     InfixOperator, IntegerLiteralExpression, PrefixExpression, PrefixOperator, Program, Statement,
     StatementKind,
 };
+use crate::environment::Environment;
 use crate::location::Location;
 use crate::object::{
     self, Boolean, Inspectable, Integer, Null, ObjRef, Object, ObjectKind, Return,
 };
-use crate::parser;
+use crate::{environment, parser};
 
 use std::borrow::Borrow;
 use std::collections::HashMap;
@@ -75,6 +76,12 @@ impl From<object::Error> for Error {
     }
 }
 
+impl From<environment::Error> for Error {
+    fn from(e: environment::Error) -> Self {
+        EvaluationError::new_evaluation_error(format!("{}", e))
+    }
+}
+
 #[derive(Debug)]
 pub enum ErrorKind {
     Parser(ParserError),
@@ -91,59 +98,6 @@ impl Display for ErrorKind {
 }
 
 type Result<T> = result::Result<T, Error>;
-
-pub struct Environment<'a> {
-    parent: Option<&'a Environment<'a>>,
-    location: Location,
-    bindings: HashMap<String, Rc<Object>>,
-}
-
-impl Default for Environment<'_> {
-    fn default() -> Self {
-        Environment {
-            parent: None,
-            location: Location::default(),
-            bindings: HashMap::new(),
-        }
-    }
-}
-
-impl Environment<'_> {
-    fn set_location(&mut self, location: Location) {
-        self.location = location
-    }
-
-    fn location(&self) -> Location {
-        self.location
-    }
-
-    fn get(&self, name: &str, location: Location) -> Result<Object> {
-        self.bindings.get(name).map_or_else(
-            || {
-                Err(EvaluationError::new_evaluation_error(format!(
-                    "name not found: {} at {}",
-                    name, location
-                )))
-            },
-            |obj| Ok(ObjRef::new_obj_ref(obj.clone(), location)),
-        )
-    }
-
-    fn set(&mut self, name: String, object: Object) -> Result<Object> {
-        let location = object.location();
-        let obj_ref = Rc::new(object);
-        self.bindings.insert(name, obj_ref.clone());
-        Ok(ObjRef::new_obj_ref(obj_ref, location))
-    }
-
-    fn spawn(&self) -> Environment {
-        Environment {
-            parent: Some(&self),
-            location: self.location,
-            bindings: HashMap::new(),
-        }
-    }
-}
 
 pub trait Evaluable {
     fn evaluate(&self, env: &mut Environment) -> Result<Object>;
@@ -215,22 +169,28 @@ impl Evaluable for &Expression {
         env.set_location(self.location());
         match self.kind() {
             ExpressionKind::Boolean(kind) => evaluate_bool_literal_expresson(kind, env.location()),
-            ExpressionKind::Identifier(kind) => env.get(kind.name(), env.location()),
+
+            ExpressionKind::Identifier(kind) => Ok(env.get(kind.name(), env.location())?),
+
             ExpressionKind::IntegerLiteral(kind) => {
                 evaluate_integer_literal_expression(kind, env.location())
             }
+
             ExpressionKind::Prefix(kind) => {
                 let location = env.location();
                 let right = kind.right().evaluate(env)?;
                 evaluate_prefix_expression(kind.operator(), &right, location)
             }
+
             ExpressionKind::Infix(kind) => {
                 let location = env.location();
                 let left = kind.left().evaluate(env)?;
                 let right = kind.right().evaluate(env)?;
                 evaluate_infix_expression(kind.operator(), &left, &right, location)
             }
+
             ExpressionKind::If(kind) => evaluate_if_expression(kind, env),
+
             ExpressionKind::FunctionLiteral(_) => unimplemented!(),
             ExpressionKind::Call(_) => unimplemented!(),
         }

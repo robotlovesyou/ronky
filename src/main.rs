@@ -1,4 +1,5 @@
 mod ast;
+mod environment;
 mod evaluator;
 mod lexer;
 mod location;
@@ -7,7 +8,6 @@ mod parser;
 mod repl;
 mod source;
 mod token;
-
 use std::io;
 
 fn main() {

@@ -2,7 +2,8 @@ use std::io::Write;
 use std::{error, io};
 
 use crate::ast::Program;
-use crate::evaluator::{Environment, Evaluable};
+use crate::environment::Environment;
+use crate::evaluator::Evaluable;
 use crate::lexer::IntoTokens;
 use crate::parser::{Error, Parser};
 use crate::source::ToSource;
