@@ -52,7 +52,7 @@ trait Node: Display {
     fn token_literal(&self) -> String;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Program {
     statements: Vec<Statement>,
 }
@@ -87,7 +87,7 @@ impl Node for Program {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BlockStatement {
     token: Token,
     statements: Vec<Statement>,
@@ -117,7 +117,7 @@ impl Display for BlockStatement {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Statement {
     kind: Box<StatementKind>,
 }
@@ -154,7 +154,7 @@ impl Node for Statement {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum StatementKind {
     Let(LetStatement),
     Return(ReturnStatement),
@@ -186,7 +186,7 @@ impl Display for StatementKind {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Expression {
     kind: ExpressionKind,
 }
@@ -221,7 +221,7 @@ impl Node for Expression {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Identifier {
     token: Token,
 }
@@ -248,7 +248,7 @@ impl Display for Identifier {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ExpressionKind {
     Boolean(BooleanExpression),
     Identifier(IdentifierExpression),
@@ -292,7 +292,7 @@ impl Display for ExpressionKind {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IfExpression {
     token: Token,
     condition: Box<Expression>,
@@ -349,7 +349,7 @@ impl Display for IfExpression {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FunctionLiteralExpression {
     token: Token,
     parameters: Vec<Identifier>,
@@ -395,7 +395,7 @@ impl Display for FunctionLiteralExpression {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IdentifierExpression {
     identifier: Identifier,
 }
@@ -410,6 +410,10 @@ impl IdentifierExpression {
     pub fn token(&self) -> &Token {
         &self.identifier.token
     }
+
+    pub fn name(&self) -> &str {
+        &self.identifier.name()
+    }
 }
 
 impl Display for IdentifierExpression {
@@ -418,7 +422,7 @@ impl Display for IdentifierExpression {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IntegerLiteralExpression {
     token: Token,
     value: i64,
@@ -447,7 +451,7 @@ impl Display for IntegerLiteralExpression {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BooleanExpression {
     token: Token,
 }
@@ -472,7 +476,7 @@ impl Display for BooleanExpression {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CallExpression {
     token: Token,
     function: Box<Expression>,
@@ -516,7 +520,7 @@ impl Display for CallExpression {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PrefixExpression {
     token: Token,
     operator: PrefixOperator,
@@ -555,7 +559,7 @@ impl Display for PrefixExpression {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InfixExpression {
     left: Box<Expression>,
     right: Box<Expression>,
@@ -598,7 +602,7 @@ impl Display for InfixExpression {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ExpressionStatement {
     expression: Expression,
 }
@@ -625,7 +629,7 @@ impl Display for ExpressionStatement {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LetStatement {
     token: Token,
     name: Identifier,
@@ -656,7 +660,7 @@ impl Display for LetStatement {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ReturnStatement {
     token: Token,
     value: Expression,

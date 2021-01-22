@@ -40,7 +40,10 @@ impl Object {
     }
 
     pub fn kind(&self) -> &ObjectKind {
-        &self.kind
+        match &self.kind {
+            ObjectKind::ObjRef(kind) => kind.ptr.kind(),
+            _ => &self.kind,
+        }
     }
 
     pub fn location(&self) -> Location {
@@ -60,6 +63,7 @@ impl Object {
             ObjectKind::Boolean(boolean) => boolean.inspect(),
             ObjectKind::Null(null) => null.inspect(),
             ObjectKind::Return(rtrn) => rtrn.inspect(),
+            ObjectKind::ObjRef(obj_ref) => obj_ref.inspect(),
         }
     }
 }
@@ -71,6 +75,7 @@ impl Display for Object {
             ObjectKind::Boolean(kind) => kind.fmt(f),
             ObjectKind::Null(kind) => kind.fmt(f),
             ObjectKind::Return(kind) => kind.fmt(f),
+            ObjectKind::ObjRef(kind) => kind.fmt(f),
         }
     }
 }
@@ -92,6 +97,7 @@ pub enum ObjectKind {
     Boolean(Boolean),
     Null(Null),
     Return(Return),
+    ObjRef(ObjRef),
 }
 
 impl ObjectKind {
@@ -101,6 +107,7 @@ impl ObjectKind {
             ObjectKind::Boolean(_) => "Boolean",
             ObjectKind::Null(_) => "Null",
             ObjectKind::Return(_) => "Return",
+            ObjectKind::ObjRef(_) => "ObjRef",
         }
     }
 }
@@ -195,5 +202,26 @@ impl Return {
 impl Inspectable<Object> for Return {
     fn value(&self) -> &Object {
         &self.value()
+    }
+}
+
+#[derive(Debug)]
+pub struct ObjRef {
+    ptr: Rc<Object>,
+}
+
+impl ObjRef {
+    pub fn new_obj_ref(obj_ref: Rc<Object>, location: Location) -> Object {
+        Object::new(ObjectKind::ObjRef(ObjRef { ptr: obj_ref }), location)
+    }
+}
+
+impl Inspectable<Object> for ObjRef {
+    fn value(&self) -> &Object {
+        &self.ptr
+    }
+
+    fn inspect(&self) -> String {
+        self.ptr.inspect()
     }
 }

@@ -1,7 +1,7 @@
 use crate::location::Location;
 use std::fmt::{self, Formatter};
 
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Eq, PartialEq, Debug, Clone)]
 pub enum Kind {
     Illegal(char),
 
@@ -173,7 +173,7 @@ impl std::fmt::Display for Tag {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct Token {
     pub location: Location,
     pub kind: Kind,

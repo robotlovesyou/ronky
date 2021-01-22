@@ -1,16 +1,20 @@
-use std::result;
-
 use crate::ast::{
     BooleanExpression, Expression, ExpressionKind, ExpressionStatement, IfExpression,
     InfixOperator, IntegerLiteralExpression, PrefixExpression, PrefixOperator, Program, Statement,
     StatementKind,
 };
 use crate::location::Location;
-use crate::object::{self, Boolean, Inspectable, Integer, Null, Object, ObjectKind, Return};
+use crate::object::{
+    self, Boolean, Inspectable, Integer, Null, ObjRef, Object, ObjectKind, Return,
+};
 use crate::parser;
+
 use std::borrow::Borrow;
+use std::collections::HashMap;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::os::macos::raw::stat;
+use std::rc::Rc;
+use std::result;
 
 #[derive(Debug)]
 pub struct Error {
@@ -91,6 +95,7 @@ type Result<T> = result::Result<T, Error>;
 pub struct Environment<'a> {
     parent: Option<&'a Environment<'a>>,
     location: Location,
+    bindings: HashMap<String, Rc<Object>>,
 }
 
 impl Default for Environment<'_> {
@@ -98,6 +103,7 @@ impl Default for Environment<'_> {
         Environment {
             parent: None,
             location: Location::default(),
+            bindings: HashMap::new(),
         }
     }
 }
@@ -111,10 +117,30 @@ impl Environment<'_> {
         self.location
     }
 
+    fn get(&self, name: &str, location: Location) -> Result<Object> {
+        self.bindings.get(name).map_or_else(
+            || {
+                Err(EvaluationError::new_evaluation_error(format!(
+                    "name not found: {} at {}",
+                    name, location
+                )))
+            },
+            |obj| Ok(ObjRef::new_obj_ref(obj.clone(), location)),
+        )
+    }
+
+    fn set(&mut self, name: String, object: Object) -> Result<Object> {
+        let location = object.location();
+        let obj_ref = Rc::new(object);
+        self.bindings.insert(name, obj_ref.clone());
+        Ok(ObjRef::new_obj_ref(obj_ref, location))
+    }
+
     fn spawn(&self) -> Environment {
         Environment {
             parent: Some(&self),
             location: self.location,
+            bindings: HashMap::new(),
         }
     }
 }
@@ -126,9 +152,11 @@ pub trait Evaluable {
 impl Evaluable for Program {
     fn evaluate(&self, env: &mut Environment) -> Result<Object> {
         let mut result = Null::new_null_object(Location::default());
+
         'evaluation: for statement in self.statements().iter() {
             env.set_location(statement.location());
             result = statement.evaluate(env)?;
+
             if let ObjectKind::Return(_) = result.kind() {
                 if let ObjectKind::Return(ret) = result.try_kind_owned()? {
                     result = ret.consume();
@@ -144,6 +172,7 @@ impl Evaluable for Program {
 impl Evaluable for &[Statement] {
     fn evaluate(&self, env: &mut Environment) -> Result<Object> {
         let mut result = Null::new_null_object(env.location());
+
         'evaluation: for statement in self.iter() {
             env.set_location(statement.location());
             result = statement.evaluate(env)?;
@@ -158,7 +187,12 @@ impl Evaluable for &[Statement] {
 impl Evaluable for &Statement {
     fn evaluate(&self, env: &mut Environment) -> Result<Object> {
         match self.kind() {
-            StatementKind::Let(_) => unimplemented!(),
+            StatementKind::Let(kind) => {
+                let location = self.location();
+                let value = kind.value().evaluate(env)?;
+                env.set(kind.name().name().to_string(), value)?;
+                Ok(Null::new_null_object(location))
+            }
             StatementKind::Return(kind) => {
                 let location = self.location();
                 let value = kind.value().evaluate(env)?;
@@ -181,7 +215,7 @@ impl Evaluable for &Expression {
         env.set_location(self.location());
         match self.kind() {
             ExpressionKind::Boolean(kind) => evaluate_bool_literal_expresson(kind, env.location()),
-            ExpressionKind::Identifier(_) => unimplemented!(),
+            ExpressionKind::Identifier(kind) => env.get(kind.name(), env.location()),
             ExpressionKind::IntegerLiteral(kind) => {
                 evaluate_integer_literal_expression(kind, env.location())
             }
@@ -573,5 +607,20 @@ mod tests {
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn can_parse_let_statements_and_identifiers() -> Result<()> {
+        let tests = vec![
+            ("let a = 5; a;", Value::Integer(5)),
+            ("let a = 5 * 5; a;", Value::Integer(25)),
+            ("let a = 5; let b = a; b;", Value::Integer(5)),
+            (
+                "let a = 5; let b = a; let c = a + b + 5; c;",
+                Value::Integer(15),
+            ),
+        ];
+
+        test_evaluated_value(tests)
     }
 }
