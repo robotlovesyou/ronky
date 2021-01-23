@@ -55,8 +55,11 @@ impl Object {
     /// Takes ownership of the Object.kind value, replacing the internal with Null.
     /// Used with Return objects to allow the wrapped value to be extracted
     pub fn try_kind_owned(&mut self) -> Result<ObjectKind> {
-        // TODO this should fail if trying to take ownership of a ref kind
-        Ok(mem::replace(&mut self.kind, ObjectKind::Null(Null)))
+        match &self.kind {
+            // panic is appropriate here since this would indicate a logic error in the interpreter
+            ObjectKind::ObjRef(_) => panic!("cannot take ownership of an object ref"),
+            _ => Ok(mem::replace(&mut self.kind, ObjectKind::Null(Null))),
+        }
     }
 
     pub fn inspect(&self) -> String {
