@@ -1,8 +1,9 @@
 use std::fmt::{self, Debug, Display, Formatter};
 use std::rc::Rc;
 
+use crate::ast::{Identifier, Statement};
+use crate::environment::Environment;
 use crate::location::Location;
-use lazy_static::lazy_static;
 use std::mem;
 
 const TRUE: bool = true;
@@ -14,6 +15,7 @@ pub struct Error {
     message: String,
 }
 
+#[allow(dead_code)]
 impl Error {
     fn new(message: String) -> Error {
         Error { message }
@@ -59,11 +61,12 @@ impl Object {
 
     pub fn inspect(&self) -> String {
         match &self.kind {
-            ObjectKind::Integer(integer) => integer.inspect(),
-            ObjectKind::Boolean(boolean) => boolean.inspect(),
-            ObjectKind::Null(null) => null.inspect(),
-            ObjectKind::Return(rtrn) => rtrn.inspect(),
-            ObjectKind::ObjRef(obj_ref) => obj_ref.inspect(),
+            ObjectKind::Integer(kind) => kind.inspect(),
+            ObjectKind::Boolean(kind) => kind.inspect(),
+            ObjectKind::Null(kind) => kind.inspect(),
+            ObjectKind::Return(kind) => kind.inspect(),
+            ObjectKind::ObjRef(kind) => kind.inspect(),
+            ObjectKind::Function(kind) => kind.inspect(),
         }
     }
 }
@@ -76,6 +79,7 @@ impl Display for Object {
             ObjectKind::Null(kind) => kind.fmt(f),
             ObjectKind::Return(kind) => kind.fmt(f),
             ObjectKind::ObjRef(kind) => kind.fmt(f),
+            ObjectKind::Function(kind) => std::fmt::Display::fmt(&kind, f),
         }
     }
 }
@@ -98,6 +102,7 @@ pub enum ObjectKind {
     Null(Null),
     Return(Return),
     ObjRef(ObjRef),
+    Function(Function),
 }
 
 impl ObjectKind {
@@ -108,6 +113,7 @@ impl ObjectKind {
             ObjectKind::Null(_) => "Null",
             ObjectKind::Return(_) => "Return",
             ObjectKind::ObjRef(_) => "ObjRef",
+            ObjectKind::Function(_) => "Function",
         }
     }
 }
@@ -194,14 +200,14 @@ impl Return {
     }
 
     /// Consume this return value and extract the wrapped Object.
-    pub fn consume(mut self) -> Object {
+    pub fn consume(self) -> Object {
         *self.value
     }
 }
 
 impl Inspectable<Object> for Return {
     fn value(&self) -> &Object {
-        &self.value()
+        &self.value
     }
 }
 
@@ -223,5 +229,66 @@ impl Inspectable<Object> for ObjRef {
 
     fn inspect(&self) -> String {
         self.ptr.inspect()
+    }
+}
+
+#[derive(Debug)]
+pub struct Function {
+    parameters: Vec<Identifier>,
+    body: Statement,
+    env: Environment,
+}
+
+impl Function {
+    pub fn new_function_object(
+        parameters: Vec<Identifier>,
+        body: Statement,
+        env: Environment,
+    ) -> Object {
+        let location = env.location();
+
+        Object::new(
+            ObjectKind::Function(Function {
+                parameters,
+                body,
+                env,
+            }),
+            location,
+        )
+    }
+
+    pub fn parameters(&self) -> &[Identifier] {
+        &self.parameters
+    }
+
+    pub fn body(&self) -> &Statement {
+        &self.body
+    }
+
+    pub fn env(&self) -> &Environment {
+        &self.env
+    }
+}
+
+impl Display for Function {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let parameters = self
+            .parameters
+            .iter()
+            .map(|p| format!("{}", p))
+            .collect::<Vec<String>>()
+            .join(", ");
+
+        write!(f, "fn ({}) {}", parameters, self.body)
+    }
+}
+
+impl Inspectable<Function> for Function {
+    fn value(&self) -> &Function {
+        &self
+    }
+
+    fn inspect(&self) -> String {
+        format!("{}", self)
     }
 }

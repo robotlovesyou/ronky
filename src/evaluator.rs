@@ -1,20 +1,15 @@
 use crate::ast::{
-    BooleanExpression, Expression, ExpressionKind, ExpressionStatement, IfExpression,
-    InfixOperator, IntegerLiteralExpression, PrefixExpression, PrefixOperator, Program, Statement,
-    StatementKind,
+    BooleanExpression, Expression, ExpressionKind, ExpressionStatement, Identifier, IfExpression,
+    InfixOperator, IntegerLiteralExpression, PrefixOperator, Program, Statement, StatementKind,
 };
 use crate::environment::Environment;
 use crate::location::Location;
 use crate::object::{
-    self, Boolean, Inspectable, Integer, Null, ObjRef, Object, ObjectKind, Return,
+    self, Boolean, Function, Inspectable, Integer, Null, Object, ObjectKind, Return,
 };
 use crate::{environment, parser};
 
-use std::borrow::Borrow;
-use std::collections::HashMap;
 use std::fmt::{self, Debug, Display, Formatter};
-use std::os::macos::raw::stat;
-use std::rc::Rc;
 use std::result;
 
 #[derive(Debug)]
@@ -40,6 +35,7 @@ pub struct ParserError {
 }
 
 impl ParserError {
+    #[allow(dead_code)] // required by the test suite
     fn new_parser_error(e: parser::Error) -> Error {
         Error::new(ErrorKind::Parser(ParserError {
             message: format!("parser error: {}", e),
@@ -191,10 +187,81 @@ impl Evaluable for &Expression {
 
             ExpressionKind::If(kind) => evaluate_if_expression(kind, env),
 
-            ExpressionKind::FunctionLiteral(_) => unimplemented!(),
-            ExpressionKind::Call(_) => unimplemented!(),
+            ExpressionKind::FunctionLiteral(kind) => {
+                let parameters = kind
+                    .parameters()
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<Identifier>>();
+                let body = kind.body().clone();
+                Ok(Function::new_function_object(
+                    parameters,
+                    body,
+                    env.closed(),
+                ))
+            }
+
+            ExpressionKind::Call(kind) => {
+                let location = env.location();
+                let function = kind.function().evaluate(env)?;
+                let arguments = eval_expressions(kind.arguments(), env)?;
+                apply_function(function, arguments, location)
+            }
         }
     }
+}
+
+fn eval_expressions(expressions: &[Expression], env: &mut Environment) -> Result<Vec<Object>> {
+    let mut objects = Vec::new();
+    for expression in expressions {
+        objects.push(expression.evaluate(env)?);
+    }
+    Ok(objects)
+}
+
+fn unwrap_return(mut object: Object) -> Result<Object> {
+    if let ObjectKind::Return(_) = object.kind() {
+        if let ObjectKind::Return(rtrn) = object.try_kind_owned()? {
+            return Ok(rtrn.consume());
+        }
+    }
+    Ok(object)
+}
+
+fn apply_function(func: Object, arguments: Vec<Object>, location: Location) -> Result<Object> {
+    match func.kind() {
+        ObjectKind::Function(kind) => {
+            let mut env = extend_function_env(kind.env(), kind.parameters(), arguments, location)?;
+            let evaluated = kind.body().evaluate(&mut env)?;
+            unwrap_return(evaluated)
+        }
+        other => Err(EvaluationError::new_evaluation_error(format!(
+            "expected function but got {}",
+            other.name()
+        ))),
+    }
+}
+
+fn extend_function_env(
+    env: &Environment,
+    arguments: &[Identifier],
+    argument_values: Vec<Object>,
+    location: Location,
+) -> Result<Environment> {
+    if arguments.len() != argument_values.len() {
+        return Err(EvaluationError::new_evaluation_error(format!(
+            "wrong number of arguments at {}",
+            location
+        )));
+    }
+
+    let mut function_env = env.closed();
+
+    for (argument, val) in arguments.iter().zip(argument_values.into_iter()) {
+        function_env.set(argument.name().to_string(), val)?;
+    }
+
+    Ok(function_env)
 }
 
 fn evaluate_integer_literal_expression(
@@ -579,6 +646,52 @@ mod tests {
                 "let a = 5; let b = a; let c = a + b + 5; c;",
                 Value::Integer(15),
             ),
+        ];
+
+        test_evaluated_value(tests)
+    }
+
+    #[test]
+    fn can_parse_function_object() -> Result<()> {
+        let source = "fn(x) { x + 2; };";
+        let program = program_from_source(source)?;
+        let mut env = Environment::default();
+        let evaluated = program.evaluate(&mut env)?;
+        match evaluated.kind() {
+            ObjectKind::Function(kind) => {
+                assert_eq!(1, kind.parameters().len());
+                assert_eq!("x", kind.parameters()[0].name());
+                assert_eq!("{\n\t(x + 2)\n}", kind.body().to_string());
+            }
+            other => panic!("{:?} is not the expected object type", other),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn can_apply_a_function() -> Result<()> {
+        let tests = vec![
+            (
+                "let identity = fn(x) { x; }; identity(5);",
+                Value::Integer(5),
+            ),
+            (
+                "let identity = fn(x) { return x; }; identity(5);",
+                Value::Integer(5),
+            ),
+            (
+                "let double = fn(x) { x * 2; }; double(5);",
+                Value::Integer(10),
+            ),
+            (
+                "let add = fn(x, y) { x + y; }; add(5, 5);",
+                Value::Integer(10),
+            ),
+            (
+                "let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));",
+                Value::Integer(20),
+            ),
+            ("fn(x) { x; }(5)", Value::Integer(5)),
         ];
 
         test_evaluated_value(tests)
