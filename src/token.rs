@@ -7,6 +7,7 @@ pub enum Kind {
 
     Ident(String),
     Int(String),
+    Str(String),
 
     Assign,
     Plus,
@@ -45,6 +46,7 @@ impl Kind {
             Illegal(_) => Tag::Illegal,
             Ident(_) => Tag::Ident,
             Int(_) => Tag::Int,
+            Str(_) => Tag::Str,
             Assign => Tag::Assign,
             Plus => Tag::Plus,
             Minus => Tag::Minus,
@@ -76,10 +78,16 @@ impl fmt::Display for Kind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         use self::Kind::*;
         let mut char_buffer = [0; 4];
+        // the formatted repr of a Str(...) needs to outlive the match expression
+        let string_buffer: String;
         let display: &str = match self {
             Illegal(ref illegal) => illegal.encode_utf8(&mut char_buffer),
             Ident(ref ident) => &ident,
             Int(repr) => &repr,
+            Str(repr) => {
+                string_buffer = format!("\"{}\"", repr);
+                &string_buffer
+            }
             Assign => "=",
             Plus => "+",
             Minus => "-",
@@ -113,6 +121,7 @@ pub enum Tag {
     Illegal,
     Ident,
     Int,
+    Str,
     Assign,
     Plus,
     Minus,
@@ -145,6 +154,7 @@ impl std::fmt::Display for Tag {
             Illegal => "illegal",
             Ident => "identifier",
             Int => "integer",
+            Str => "string",
             Assign => "assignment",
             Plus => "plus",
             Minus => "minus",
@@ -214,6 +224,7 @@ mod tests {
             (Kind::Illegal('a'), Tag::Illegal),
             (Kind::Ident("abc".to_string()), Tag::Ident),
             (Kind::Int("123".to_string()), Tag::Int),
+            (Kind::Str("abc".to_string()), Tag::Str),
             (Kind::Assign, Tag::Assign),
             (Kind::Plus, Tag::Plus),
             (Kind::Minus, Tag::Minus),

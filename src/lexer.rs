@@ -58,6 +58,17 @@ impl Lexer {
         }
         new_token(first, Kind::Int(number))
     }
+
+    fn read_string(&mut self, first: &SourceChar) -> Option<Token> {
+        let mut value = String::new();
+        while let Some(sc) = self.source.next() {
+            if sc.repr == '"' {
+                break;
+            }
+            value.push(sc.repr);
+        }
+        new_token(first, Kind::Str(value))
+    }
 }
 
 fn new_token(sc: &SourceChar, kind: Kind) -> Option<Token> {
@@ -101,6 +112,7 @@ impl Iterator for Lexer {
                 '}' => new_token(&sc, Kind::RBrace),
                 '(' => new_token(&sc, Kind::LParen),
                 ')' => new_token(&sc, Kind::RParen),
+                '"' => self.read_string(&sc),
                 c if is_letter(c) => self.read_identifier(&sc),
                 c if is_digit(c) => self.read_number(&sc),
                 illegal => new_token(&sc, Illegal(illegal)),
@@ -153,6 +165,8 @@ mod tests {
 
     10 == 10;
     10 != 9;
+    \"foobar\"
+    \"foo bar\"
     "};
 
     fn expected_tokens() -> Vec<Token> {
@@ -230,6 +244,8 @@ mod tests {
             Token::new(Location::new(19, 4), Kind::NotEQ),
             Token::new(Location::new(19, 7), Kind::Int("9".to_string())),
             Token::new(Location::new(19, 8), Kind::Semicolon),
+            Token::new(Location::new(20, 1), Kind::Str("foobar".to_string())),
+            Token::new(Location::new(21, 1), Kind::Str("foo bar".to_string())),
         ]
     }
 

@@ -207,6 +207,7 @@ impl Evaluable for &Expression {
                 let arguments = eval_expressions(kind.arguments(), env)?;
                 apply_function(function, arguments, location)
             }
+            ExpressionKind::Str(_) => unimplemented!(),
         }
     }
 }
@@ -426,6 +427,7 @@ fn is_truthy(object: &Object, location: Location) -> Result<bool> {
 
 #[cfg(test)]
 mod tests {
+    // TODO: Add in missing function call tests from other expression tests (see go source)
     use super::*;
     use crate::lexer::IntoTokens;
     use crate::parser::Parser;

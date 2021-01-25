@@ -258,20 +258,22 @@ pub enum ExpressionKind {
     If(IfExpression),
     FunctionLiteral(FunctionLiteralExpression),
     Call(CallExpression),
+    Str(StrExpression),
 }
 
 impl ExpressionKind {
     pub fn token(&self) -> &Token {
         use self::ExpressionKind::*;
         match self {
-            Identifier(identifier_expression) => identifier_expression.token(),
-            IntegerLiteral(integer_literal) => integer_literal.token(),
-            Prefix(prefix_expression) => prefix_expression.token(),
-            Infix(infix_expression) => infix_expression.token(),
-            Boolean(boolean_expression) => boolean_expression.token(),
-            If(if_expression) => if_expression.token(),
-            FunctionLiteral(function_literal_expression) => function_literal_expression.token(),
-            Call(call_expression) => call_expression.token(),
+            Identifier(kind) => kind.token(),
+            IntegerLiteral(kind) => kind.token(),
+            Prefix(kind) => kind.token(),
+            Infix(kind) => kind.token(),
+            Boolean(kind) => kind.token(),
+            If(kind) => kind.token(),
+            FunctionLiteral(kind) => kind.token(),
+            Call(kind) => kind.token(),
+            Str(kind) => kind.token(),
         }
     }
 }
@@ -288,6 +290,7 @@ impl Display for ExpressionKind {
             If(kind) => kind.fmt(f),
             FunctionLiteral(kind) => kind.fmt(f),
             Call(kind) => kind.fmt(f),
+            Str(kind) => kind.fmt(f),
         }
     }
 }
@@ -686,6 +689,32 @@ impl Display for ReturnStatement {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct StrExpression {
+    token: Token,
+}
+
+impl Display for StrExpression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.token.kind)
+    }
+}
+
+impl StrExpression {
+    pub fn new_str_expression(token: Token) -> Expression {
+        Expression::new(ExpressionKind::Str(StrExpression { token }))
+    }
+    pub fn token(&self) -> &Token {
+        &self.token
+    }
+
+    pub fn value(&self) -> &str {
+        match &self.token.kind {
+            Kind::Str(repr) => &repr,
+            other => panic!("Str token is a {:?} not a Kind::Str", other),
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;

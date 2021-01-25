@@ -193,6 +193,10 @@ impl Parser {
             parser.parse_integer_literal_expression(token)
         });
 
+        parser.register_prefix_fn(Tag::Str, |parser: &mut Parser, token: Token| {
+            parser.parse_string(token)
+        });
+
         parser.register_prefix_fn(Tag::Minus, |parser: &mut Parser, token: Token| {
             parser.parse_prefix_expression(token)
         });
@@ -502,18 +506,6 @@ impl Parser {
             }
             identifiers.push(Identifier::new(next_token));
             self.optional_peek_consume(Tag::Comma);
-            // if let Some(maybe_comma) = self.lexer.peek() {
-            //     if maybe_comma.kind.tag() != Tag::Comma && maybe_comma.kind.tag() != Tag::RParen {
-            //         return Err(StatementError::unexpected_token(
-            //             "comma or right paren",
-            //             maybe_comma,
-            //             PARSING_A_PARAMETER_LIST,
-            //         ));
-            //     }
-            //     if maybe_comma.kind.tag() == Tag::Comma {
-            //         self.expect_next()?;
-            //     }
-            // }
         }
 
         Ok(identifiers)
@@ -547,6 +539,10 @@ impl Parser {
             self.optional_peek_consume(Tag::Comma);
         }
         Ok(arguments)
+    }
+
+    fn parse_string(&mut self, token: Token) -> Result<Expression> {
+        Ok(StrExpression::new_str_expression(token))
     }
 
     fn consume_source_line(&mut self) {
@@ -634,6 +630,7 @@ mod tests {
         Integer(i64),
         Identifier(&'static str),
         Boolean(bool),
+        Str(&'static str),
     }
 
     fn test_integer_literal(integer_literal: &IntegerLiteralExpression, expected: i64) {
@@ -649,6 +646,10 @@ mod tests {
         assert_eq!(boolean_expression.value(), expected);
     }
 
+    fn test_string_literal(string_expression: &StrExpression, expected: &str) {
+        assert_eq!(string_expression.value(), expected);
+    }
+
     fn test_literal_expression(expression: &Expression, expected: Operand) {
         match (expression.kind(), expected) {
             (ExpressionKind::IntegerLiteral(integer), Operand::Integer(expected_int)) => {
@@ -659,6 +660,9 @@ mod tests {
             }
             (ExpressionKind::Boolean(boolean), Operand::Boolean(b)) => {
                 test_boolean_literal(boolean, b)
+            }
+            (ExpressionKind::Str(str_expression), Operand::Str(expected)) => {
+                test_string_literal(str_expression, expected)
             }
             (other_kind, other_operand) => panic!(
                 "non matching expression kind {:?} and operand {:?}",
@@ -789,6 +793,18 @@ mod tests {
         assert_eq!(1, program.statements().len());
         test_statement_as_expression_statement(program.statements().first().unwrap(), |ex| {
             test_literal_expression(ex, Operand::Integer(5))
+        });
+        Ok(())
+    }
+
+    #[test]
+    fn can_parse_a_string_literal_expression() -> Result<()> {
+        let source = "\"Hello, World\";";
+        let mut parser = parser_from_source(source);
+        let program = parser.parse()?;
+        assert_eq!(1, program.statements().len());
+        test_statement_as_expression_statement(program.statements().first().unwrap(), |ex| {
+            test_literal_expression(ex, Operand::Str("Hello, World"))
         });
         Ok(())
     }
