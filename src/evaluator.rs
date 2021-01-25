@@ -5,7 +5,7 @@ use crate::ast::{
 use crate::environment::Environment;
 use crate::location::Location;
 use crate::object::{
-    self, Boolean, Function, Inspectable, Integer, Null, Object, ObjectKind, Return,
+    self, Boolean, Function, Inspectable, Integer, Null, Object, ObjectKind, Return, Str,
 };
 use crate::{environment, parser};
 
@@ -207,7 +207,11 @@ impl Evaluable for &Expression {
                 let arguments = eval_expressions(kind.arguments(), env)?;
                 apply_function(function, arguments, location)
             }
-            ExpressionKind::Str(_) => unimplemented!(),
+
+            ExpressionKind::Str(kind) => {
+                let location = env.location();
+                Ok(Str::new_str_object(kind.value().to_string(), location))
+            }
         }
     }
 }
@@ -335,6 +339,9 @@ fn evaluate_infix_expression(
         (ObjectKind::Boolean(a), ObjectKind::Boolean(b)) => {
             evaluate_boolean_infix_expression(operator, a, b, location)
         }
+        (ObjectKind::Str(a), ObjectKind::Str(b)) => {
+            evaluate_str_infix_expression(operator, a, b, location)
+        }
         _ => Err(EvaluationError::new_evaluation_error(format!(
             "type mismatch: {} {} {} at {}",
             left.kind().name(),
@@ -399,6 +406,24 @@ fn evaluate_boolean_infix_expression(
     }
 }
 
+fn evaluate_str_infix_expression(
+    operator: InfixOperator,
+    left: &Str,
+    right: &Str,
+    location: Location,
+) -> Result<Object> {
+    match operator {
+        InfixOperator::Add => Ok(Str::new_str_object(
+            format!("{}{}", left.value(), right.value()),
+            location,
+        )),
+        _ => Err(EvaluationError::new_evaluation_error(format!(
+            "unknown operator: String {} String at {}",
+            operator, location
+        ))),
+    }
+}
+
 fn evaluate_if_expression(expression: &IfExpression, env: &mut Environment) -> Result<Object> {
     let condition = expression.condition().evaluate(env)?;
     if is_truthy(&condition, expression.condition().location())? {
@@ -440,6 +465,7 @@ mod tests {
         Integer(i64),
         Boolean(bool),
         Null,
+        Str(&'static str),
     }
 
     impl From<parser::Error> for Error {
@@ -461,6 +487,9 @@ mod tests {
             }
             (ObjectKind::Boolean(boolean), Value::Boolean(expected)) => {
                 assert_eq!(&expected, boolean.value(), "{}", source)
+            }
+            (ObjectKind::Str(value), Value::Str(expected)) => {
+                assert_eq!(expected, value.value())
             }
             (ObjectKind::Null(_), Value::Null) => {} // do nothing, these are always equal
             other => panic!("{:?} is not a valid option with source {}", other, source),
@@ -505,6 +534,16 @@ mod tests {
         let tests = vec![
             ("true", Value::Boolean(true)),
             ("false", Value::Boolean(false)),
+        ];
+
+        test_evaluated_value(tests)
+    }
+
+    #[test]
+    fn can_evaluate_a_string_expression() -> Result<()> {
+        let tests = vec![
+            ("\"Hello, World!\"", Value::Str("Hello, World!")),
+            ("\"Hello, \" + \"World!\"", Value::Str("Hello, World!")),
         ];
 
         test_evaluated_value(tests)
@@ -618,6 +657,10 @@ mod tests {
             (
                 "if (10 > 1) { true + false; }",
                 "Error: unknown operator: Boolean + Boolean at line: 1 column: 15",
+            ),
+            (
+                "\"Hello, \" - \"World!\"",
+                "Error: unknown operator: String - String at line: 1 column: 1",
             ),
             (
                 complex_1,

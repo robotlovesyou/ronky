@@ -70,6 +70,7 @@ impl Object {
             ObjectKind::Return(kind) => kind.inspect(),
             ObjectKind::ObjRef(kind) => kind.inspect(),
             ObjectKind::Function(kind) => kind.inspect(),
+            ObjectKind::Str(kind) => kind.inspect(),
         }
     }
 }
@@ -83,11 +84,12 @@ impl Display for Object {
             ObjectKind::Return(kind) => kind.fmt(f),
             ObjectKind::ObjRef(kind) => kind.fmt(f),
             ObjectKind::Function(kind) => std::fmt::Display::fmt(&kind, f),
+            ObjectKind::Str(kind) => std::fmt::Display::fmt(&kind, f),
         }
     }
 }
 
-pub trait Inspectable<T>
+pub trait Inspectable<T: ?Sized>
 where
     T: Display,
 {
@@ -106,6 +108,7 @@ pub enum ObjectKind {
     Return(Return),
     ObjRef(ObjRef),
     Function(Function),
+    Str(Str),
 }
 
 impl ObjectKind {
@@ -117,6 +120,7 @@ impl ObjectKind {
             ObjectKind::Return(_) => "Return",
             ObjectKind::ObjRef(_) => "ObjRef",
             ObjectKind::Function(_) => "Function",
+            ObjectKind::Str(_) => "String",
         }
     }
 }
@@ -293,5 +297,32 @@ impl Inspectable<Function> for Function {
 
     fn inspect(&self) -> String {
         format!("{}", self)
+    }
+}
+
+#[derive(Debug)]
+pub struct Str {
+    value: String,
+}
+
+impl Str {
+    pub fn new_str_object(value: String, location: Location) -> Object {
+        Object::new(ObjectKind::Str(Str { value }), location)
+    }
+}
+
+impl Display for Str {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.inspect())
+    }
+}
+
+impl Inspectable<str> for Str {
+    fn value(&self) -> &str {
+        &self.value
+    }
+
+    fn inspect(&self) -> String {
+        format!("\"{}\"", self.value)
     }
 }
