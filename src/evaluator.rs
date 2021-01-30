@@ -215,6 +215,7 @@ impl Evaluable for &Expression {
                 let location = env.location();
                 Ok(Str::new_str_object(kind.value().to_string(), location))
             }
+            ExpressionKind::Array(kind) => unimplemented!(),
         }
     }
 }

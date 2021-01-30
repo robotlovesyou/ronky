@@ -2,6 +2,7 @@ use crate::location::Location;
 use crate::token::{Kind, Token};
 use std::fmt::{self, Display, Formatter};
 
+pub use array_literal::*;
 pub use block_statement::*;
 pub use boolean_expression::*;
 pub use call_expression::*;
@@ -18,6 +19,7 @@ pub use program::*;
 pub use return_statement::*;
 pub use str_expression::*;
 
+mod array_literal;
 mod block_statement;
 mod boolean_expression;
 mod call_expression;
@@ -153,6 +155,7 @@ pub enum ExpressionKind {
     FunctionLiteral(FunctionLiteralExpression),
     Call(CallExpression),
     Str(StrExpression),
+    Array(ArrayLiteral),
 }
 
 impl ExpressionKind {
@@ -168,6 +171,7 @@ impl ExpressionKind {
             FunctionLiteral(kind) => kind.token(),
             Call(kind) => kind.token(),
             Str(kind) => kind.token(),
+            Array(kind) => kind.token(),
         }
     }
 }
@@ -185,6 +189,7 @@ impl Display for ExpressionKind {
             FunctionLiteral(kind) => kind.fmt(f),
             Call(kind) => kind.fmt(f),
             Str(kind) => kind.fmt(f),
+            Array(kind) => kind.fmt(f),
         }
     }
 }

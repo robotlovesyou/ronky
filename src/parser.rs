@@ -225,6 +225,10 @@ impl Parser {
             parser.parse_function_literal(token)
         });
 
+        parser.register_prefix_fn(Tag::LBracket, |parser: &mut Parser, token: Token| {
+            parser.parse_array_literal(token)
+        });
+
         parser.register_infix_fn(
             Tag::Plus,
             |parser: &mut Parser, left: Expression, token: Token| {
@@ -524,15 +528,15 @@ impl Parser {
     }
 
     fn parse_call_expression(&mut self, left: Expression, token: Token) -> Result<Expression> {
-        let arguments = self.parse_call_arguments()?;
+        let arguments = self.parse_expression_list(Tag::RParen)?;
         Ok(CallExpression::new_call_expression(token, left, arguments))
     }
 
-    fn parse_call_arguments(&mut self) -> Result<Vec<Expression>> {
+    fn parse_expression_list(&mut self, end_tag: Tag) -> Result<Vec<Expression>> {
         let mut arguments = Vec::new();
 
         while let Some(token) = self.lexer.next() {
-            if token.kind.tag() == Tag::RParen {
+            if token.kind.tag() == end_tag {
                 break;
             }
             arguments.push(self.parse_expression(token, Precedence::Lowest)?);
@@ -543,6 +547,11 @@ impl Parser {
 
     fn parse_string(&mut self, token: Token) -> Result<Expression> {
         Ok(StrExpression::new_str_expression(token))
+    }
+
+    fn parse_array_literal(&mut self, token: Token) -> Result<Expression> {
+        let elements = self.parse_expression_list(Tag::RBracket)?;
+        Ok(ArrayLiteral::new(token, elements))
     }
 
     fn consume_source_line(&mut self) {
@@ -1199,6 +1208,38 @@ mod tests {
                     )
                 }
                 other => panic!("got {:?} expecting a call_expression", other),
+            },
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn can_parse_array_literal() -> Result<()> {
+        let source = "[1, 2 * 2, 3 + 3]";
+
+        let mut parser = parser_from_source(source);
+        let program = parser.parse()?;
+        assert_eq!(1, program.statements().len());
+        test_statement_as_expression_statement(
+            program.statements().first().unwrap(),
+            |ex| match ex.kind() {
+                ExpressionKind::Array(kind) => {
+                    assert_eq!(3, kind.elements().len());
+                    test_literal_expression(&kind.elements()[0], Operand::Integer(1));
+                    test_infix_expression(
+                        &kind.elements()[1],
+                        Operand::Integer(2),
+                        Operand::Integer(2),
+                        InfixOperator::Multiply,
+                    );
+                    test_infix_expression(
+                        &kind.elements()[2],
+                        Operand::Integer(3),
+                        Operand::Integer(3),
+                        InfixOperator::Add,
+                    );
+                }
+                other => panic!("got {:?} expecting an array_literal", other),
             },
         );
         Ok(())

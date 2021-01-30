@@ -112,6 +112,8 @@ impl Iterator for Lexer {
                 '}' => new_token(&sc, Kind::RBrace),
                 '(' => new_token(&sc, Kind::LParen),
                 ')' => new_token(&sc, Kind::RParen),
+                '[' => new_token(&sc, Kind::LBracket),
+                ']' => new_token(&sc, Kind::RBracket),
                 '"' => self.read_string(&sc),
                 c if is_letter(c) => self.read_identifier(&sc),
                 c if is_digit(c) => self.read_number(&sc),
@@ -167,6 +169,7 @@ mod tests {
     10 != 9;
     \"foobar\"
     \"foo bar\"
+    [1,2];
     "};
 
     fn expected_tokens() -> Vec<Token> {
@@ -246,6 +249,12 @@ mod tests {
             Token::new(Location::new(19, 8), Kind::Semicolon),
             Token::new(Location::new(20, 1), Kind::Str("foobar".to_string())),
             Token::new(Location::new(21, 1), Kind::Str("foo bar".to_string())),
+            Token::new(Location::new(22, 1), Kind::LBracket),
+            Token::new(Location::new(22, 2), Kind::Int("1".to_string())),
+            Token::new(Location::new(22, 3), Kind::Comma),
+            Token::new(Location::new(22, 4), Kind::Int("2".to_string())),
+            Token::new(Location::new(22, 5), Kind::RBracket),
+            Token::new(Location::new(22, 6), Kind::Semicolon),
         ]
     }
 
