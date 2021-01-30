@@ -6,9 +6,11 @@ use crate::environment::Environment;
 use crate::location::Location;
 use crate::object::{
     self, Boolean, Function, Inspectable, Integer, Null, Object, ObjectKind, Return, Str,
+    UserFunction,
 };
 use crate::{environment, parser};
 
+use std::collections::HashMap;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::result;
 
@@ -194,7 +196,7 @@ impl Evaluable for &Expression {
                     .cloned()
                     .collect::<Vec<Identifier>>();
                 let body = kind.body().clone();
-                Ok(Function::new_function_object(
+                Ok(UserFunction::new_user_function_object(
                     parameters,
                     body,
                     env.closed(),
@@ -235,7 +237,7 @@ fn unwrap_return(mut object: Object) -> Result<Object> {
 
 fn apply_function(func: Object, arguments: Vec<Object>, location: Location) -> Result<Object> {
     match func.kind() {
-        ObjectKind::Function(kind) => {
+        ObjectKind::Function(Function::User(kind)) => {
             let mut env = extend_function_env(kind.env(), kind.parameters(), arguments, location)?;
             let evaluated = kind.body().evaluate(&mut env)?;
             unwrap_return(evaluated)
@@ -506,6 +508,20 @@ mod tests {
         Ok(())
     }
 
+    fn test_evaluated_error(tests: Vec<(&str, &str)>) -> Result<()> {
+        for (source, error) in tests {
+            let program = program_from_source(source)?;
+            let mut env = Environment::default();
+            let result = program.evaluate(&mut env);
+            match result {
+                Ok(_) => panic!("program should fail to evaluate: `{}`", source),
+                Err(e) => assert_eq!(error, format!("{}", e).as_str()),
+            }
+        }
+
+        Ok(())
+    }
+
     #[test]
     fn can_evaluate_integer_expression() -> Result<()> {
         let tests = vec![
@@ -668,17 +684,7 @@ mod tests {
             ),
         ];
 
-        for (source, error) in tests {
-            let program = program_from_source(source)?;
-            let mut env = Environment::default();
-            let result = program.evaluate(&mut env);
-            match result {
-                Ok(_) => panic!("program should fail to evaluate: `{}`", source),
-                Err(e) => assert_eq!(error, format!("{}", e).as_str()),
-            }
-        }
-
-        Ok(())
+        test_evaluated_error(tests)
     }
 
     #[test]
@@ -703,7 +709,7 @@ mod tests {
         let mut env = Environment::default();
         let evaluated = program.evaluate(&mut env)?;
         match evaluated.kind() {
-            ObjectKind::Function(kind) => {
+            ObjectKind::Function(Function::User(kind)) => {
                 assert_eq!(1, kind.parameters().len());
                 assert_eq!("x", kind.parameters()[0].name());
                 assert_eq!("{\n\t(x + 2)\n}", kind.body().to_string());
@@ -741,4 +747,31 @@ mod tests {
 
         test_evaluated_value(tests)
     }
+
+    // #[test]
+    // fn can_evaluate_a_builtin_function() -> Result<()> {
+    //     let tests = vec![
+    //         ("len(\"\")", Value::Integer(0)),
+    //         ("len(\"four\")", Value::Integer(4)),
+    //         ("len(\"hello world\")", Value::Integer(11)),
+    //     ];
+    //
+    //     test_evaluated_value(tests)
+    // }
+    //
+    // #[test]
+    // fn expected_error_evaluating_builtin_function() -> Result<()> {
+    //     let tests = vec![
+    //         (
+    //             "len(1)",
+    //             "error: argument to `len` not supported, got INTEGER at line: 1 column 1",
+    //         ),
+    //         (
+    //             "len(\"one\", \"two\")",
+    //             "error: wrong number of arguments. got 2, want 1 at line: 1 column: 1",
+    //         ),
+    //     ];
+    //
+    //     test_evaluated_error(tests)
+    // }
 }
