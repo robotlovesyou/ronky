@@ -38,7 +38,7 @@ impl Error {
 
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "Object Error: {}", self.message)
+        write!(f, "{}", self.message)
     }
 }
 

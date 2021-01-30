@@ -1,7 +1,7 @@
 use crate::ast::{Identifier, Statement};
 use crate::environment::Environment;
 use crate::location::Location;
-use crate::object::{Inspectable, Object, ObjectKind, Result};
+use crate::object::{Error, Inspectable, Integer, Object, ObjectKind, Result};
 use std::fmt::{self, Display, Formatter};
 
 #[derive(Debug)]
@@ -35,8 +35,38 @@ pub enum Builtin {
 }
 
 impl Builtin {
-    pub fn apply(arguments: Vec<Object>, location: Location) -> Result<Object> {
-        unimplemented!()
+    pub fn new_len(location: Location) -> Object {
+        Object::new(
+            ObjectKind::Function(Function::Builtin(Builtin::Len)),
+            location,
+        )
+    }
+    pub fn apply(&self, arguments: Vec<Object>, location: Location) -> Result<Object> {
+        match self {
+            Builtin::Len => self.apply_len(arguments, location),
+        }
+    }
+
+    fn apply_len(&self, arguments: Vec<Object>, location: Location) -> Result<Object> {
+        if arguments.len() != 1 {
+            Err(Error::new(format!(
+                "wrong number of arguments. got {}, want 1 at {}",
+                arguments.len(),
+                location
+            )))
+        } else {
+            match &arguments[0].kind {
+                ObjectKind::Str(s) => Ok(Integer::new_integer_object(
+                    s.value().len() as i64,
+                    location,
+                )),
+                other => Err(Error::new(format!(
+                    "argument to `len` not supported, got {} at {}",
+                    other.name(),
+                    location
+                ))),
+            }
+        }
     }
 }
 
