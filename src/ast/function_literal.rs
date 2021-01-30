@@ -1,0 +1,49 @@
+use crate::ast::{Expression, ExpressionKind, Identifier, Statement};
+use crate::token::Token;
+use std::fmt::{self, Display, Formatter};
+
+#[derive(Debug, Clone)]
+pub struct FunctionLiteralExpression {
+    token: Token,
+    parameters: Vec<Identifier>,
+    body: Statement,
+}
+
+impl FunctionLiteralExpression {
+    pub fn new_function_literal_expression(
+        token: Token,
+        parameters: Vec<Identifier>,
+        body: Statement,
+    ) -> Expression {
+        Expression::new(ExpressionKind::FunctionLiteral(FunctionLiteralExpression {
+            token,
+            parameters,
+            body,
+        }))
+    }
+
+    pub fn token(&self) -> &Token {
+        &self.token
+    }
+
+    pub fn parameters(&self) -> &[Identifier] {
+        &self.parameters
+    }
+
+    pub fn body(&self) -> &Statement {
+        &self.body
+    }
+}
+
+impl Display for FunctionLiteralExpression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let param_list = self
+            .parameters
+            .iter()
+            .map(|p| p.to_string())
+            .collect::<Vec<String>>()
+            .join(", ");
+
+        write!(f, "{} ({}){}", self.token, param_list, self.body)
+    }
+}
