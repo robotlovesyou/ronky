@@ -1,14 +1,17 @@
 use crate::ast::{
-    BooleanExpression, Expression, ExpressionKind, ExpressionStatement, Identifier, IfExpression,
-    InfixOperator, IntegerLiteralExpression, PrefixOperator, Program, Statement, StatementKind,
+    BooleanExpression, Expression, ExpressionKind, ExpressionStatement, Identifier,
+    IdentifierExpression, IfExpression, InfixOperator, IntegerLiteralExpression, PrefixOperator,
+    Program, Statement, StatementKind,
 };
 use crate::environment::Environment;
 use crate::location::Location;
 use crate::object::{
-    self, Boolean, Function, Inspectable, Integer, Null, Object, ObjectKind, Return, Str,
+    self, Boolean, Builtin, Function, Inspectable, Integer, Null, Object, ObjectKind, Return, Str,
+    UserFunction,
 };
 use crate::{environment, parser};
 
+use std::collections::HashMap;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::result;
 
@@ -166,7 +169,7 @@ impl Evaluable for &Expression {
         match self.kind() {
             ExpressionKind::Boolean(kind) => evaluate_bool_literal_expresson(kind, env.location()),
 
-            ExpressionKind::Identifier(kind) => Ok(env.get(kind.name(), env.location())?),
+            ExpressionKind::Identifier(kind) => evaluate_identifier(kind, env),
 
             ExpressionKind::IntegerLiteral(kind) => {
                 evaluate_integer_literal_expression(kind, env.location())
@@ -194,7 +197,7 @@ impl Evaluable for &Expression {
                     .cloned()
                     .collect::<Vec<Identifier>>();
                 let body = kind.body().clone();
-                Ok(Function::new_function_object(
+                Ok(UserFunction::new_user_function_object(
                     parameters,
                     body,
                     env.closed(),
@@ -204,7 +207,7 @@ impl Evaluable for &Expression {
             ExpressionKind::Call(kind) => {
                 let location = env.location();
                 let function = kind.function().evaluate(env)?;
-                let arguments = eval_expressions(kind.arguments(), env)?;
+                let arguments = evaluate_expressions(kind.arguments(), env)?;
                 apply_function(function, arguments, location)
             }
 
@@ -216,7 +219,20 @@ impl Evaluable for &Expression {
     }
 }
 
-fn eval_expressions(expressions: &[Expression], env: &mut Environment) -> Result<Vec<Object>> {
+fn evaluate_identifier(identifier: &IdentifierExpression, env: &mut Environment) -> Result<Object> {
+    let result = env.get(identifier.name(), env.location());
+    if result.is_ok() {
+        Ok(result?)
+    } else {
+        match identifier.name() {
+            "len" => Ok(Builtin::new_len(env.location())),
+            // good to unwrap here as Ok variant is discounted above
+            _ => Err(Error::from(result.err().unwrap())),
+        }
+    }
+}
+
+fn evaluate_expressions(expressions: &[Expression], env: &mut Environment) -> Result<Vec<Object>> {
     let mut objects = Vec::new();
     for expression in expressions {
         objects.push(expression.evaluate(env)?);
@@ -235,11 +251,12 @@ fn unwrap_return(mut object: Object) -> Result<Object> {
 
 fn apply_function(func: Object, arguments: Vec<Object>, location: Location) -> Result<Object> {
     match func.kind() {
-        ObjectKind::Function(kind) => {
+        ObjectKind::Function(Function::User(kind)) => {
             let mut env = extend_function_env(kind.env(), kind.parameters(), arguments, location)?;
             let evaluated = kind.body().evaluate(&mut env)?;
             unwrap_return(evaluated)
         }
+        ObjectKind::Function(Function::Builtin(kind)) => Ok(kind.apply(arguments, location)?),
         other => Err(EvaluationError::new_evaluation_error(format!(
             "expected function but got {}",
             other.name()
@@ -289,12 +306,12 @@ fn evaluate_prefix_expression(
     location: Location,
 ) -> Result<Object> {
     match operator {
-        PrefixOperator::Minus => eval_prefix_neg_expression(right, location),
-        PrefixOperator::Not => eval_prefix_not_expression(right, location),
+        PrefixOperator::Minus => evaluate_prefix_neg_expression(right, location),
+        PrefixOperator::Not => evaluate_prefix_not_expression(right, location),
     }
 }
 
-fn eval_prefix_not_expression(value: &Object, location: Location) -> Result<Object> {
+fn evaluate_prefix_not_expression(value: &Object, location: Location) -> Result<Object> {
     match value.kind() {
         ObjectKind::Integer(integer) => {
             Ok(Boolean::new_boolean_object(*integer.value() == 0, location))
@@ -312,7 +329,7 @@ fn eval_prefix_not_expression(value: &Object, location: Location) -> Result<Obje
     }
 }
 
-fn eval_prefix_neg_expression(value: &Object, location: Location) -> Result<Object> {
+fn evaluate_prefix_neg_expression(value: &Object, location: Location) -> Result<Object> {
     match value.kind() {
         ObjectKind::Integer(integer) => {
             Ok(Integer::new_integer_object(-(*integer.value()), location))
@@ -506,6 +523,20 @@ mod tests {
         Ok(())
     }
 
+    fn test_evaluated_error(tests: Vec<(&str, &str)>) -> Result<()> {
+        for (source, error) in tests {
+            let program = program_from_source(source)?;
+            let mut env = Environment::default();
+            let result = program.evaluate(&mut env);
+            match result {
+                Ok(_) => panic!("program should fail to evaluate: `{}`", source),
+                Err(e) => assert_eq!(error, format!("{}", e).as_str()),
+            }
+        }
+
+        Ok(())
+    }
+
     #[test]
     fn can_evaluate_integer_expression() -> Result<()> {
         let tests = vec![
@@ -668,17 +699,7 @@ mod tests {
             ),
         ];
 
-        for (source, error) in tests {
-            let program = program_from_source(source)?;
-            let mut env = Environment::default();
-            let result = program.evaluate(&mut env);
-            match result {
-                Ok(_) => panic!("program should fail to evaluate: `{}`", source),
-                Err(e) => assert_eq!(error, format!("{}", e).as_str()),
-            }
-        }
-
-        Ok(())
+        test_evaluated_error(tests)
     }
 
     #[test]
@@ -703,7 +724,7 @@ mod tests {
         let mut env = Environment::default();
         let evaluated = program.evaluate(&mut env)?;
         match evaluated.kind() {
-            ObjectKind::Function(kind) => {
+            ObjectKind::Function(Function::User(kind)) => {
                 assert_eq!(1, kind.parameters().len());
                 assert_eq!("x", kind.parameters()[0].name());
                 assert_eq!("{\n\t(x + 2)\n}", kind.body().to_string());
@@ -740,5 +761,32 @@ mod tests {
         ];
 
         test_evaluated_value(tests)
+    }
+
+    #[test]
+    fn can_evaluate_a_builtin_function() -> Result<()> {
+        let tests = vec![
+            ("len(\"\")", Value::Integer(0)),
+            ("len(\"four\")", Value::Integer(4)),
+            ("len(\"hello world\")", Value::Integer(11)),
+        ];
+
+        test_evaluated_value(tests)
+    }
+
+    #[test]
+    fn expected_error_evaluating_builtin_function() -> Result<()> {
+        let tests = vec![
+            (
+                "len(1)",
+                "Error: argument to `len` not supported, got Integer at line: 1 column: 4",
+            ),
+            (
+                "len(\"one\", \"two\")",
+                "Error: wrong number of arguments. got 2, want 1 at line: 1 column: 4",
+            ),
+        ];
+
+        test_evaluated_error(tests)
     }
 }
