@@ -6,6 +6,7 @@ use crate::environment::Environment;
 use crate::location::Location;
 use std::mem;
 
+pub use array_obj::*;
 pub use boolean::*;
 pub use function::*;
 pub use integer::*;
@@ -14,6 +15,7 @@ pub use obj_ref::*;
 pub use return_obj::*;
 pub use str_obj::*;
 
+mod array_obj;
 mod boolean;
 mod function;
 mod integer;
@@ -85,6 +87,7 @@ impl Object {
             ObjectKind::ObjRef(kind) => kind.inspect(),
             ObjectKind::Function(kind) => kind.inspect(),
             ObjectKind::Str(kind) => kind.inspect(),
+            ObjectKind::Array(kind) => kind.inspect(),
         }
     }
 }
@@ -99,6 +102,7 @@ impl Display for Object {
             ObjectKind::ObjRef(kind) => kind.fmt(f),
             ObjectKind::Function(kind) => std::fmt::Display::fmt(&kind, f),
             ObjectKind::Str(kind) => std::fmt::Display::fmt(&kind, f),
+            ObjectKind::Array(kind) => std::fmt::Display::fmt(&kind, f),
         }
     }
 }
@@ -123,6 +127,7 @@ pub enum ObjectKind {
     ObjRef(ObjRef),
     Function(Function),
     Str(Str),
+    Array(Array),
 }
 
 impl ObjectKind {
@@ -135,6 +140,7 @@ impl ObjectKind {
             ObjectKind::ObjRef(_) => "ObjRef",
             ObjectKind::Function(_) => "Function",
             ObjectKind::Str(_) => "String",
+            ObjectKind::Array(_) => "Array",
         }
     }
 }

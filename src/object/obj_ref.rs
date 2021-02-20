@@ -2,7 +2,7 @@ use crate::location::Location;
 use crate::object::{Inspectable, Object, ObjectKind};
 use std::rc::Rc;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ObjRef {
     pub ptr: Rc<Object>,
 }

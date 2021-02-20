@@ -6,8 +6,8 @@ use crate::ast::{
 use crate::environment::Environment;
 use crate::location::Location;
 use crate::object::{
-    self, Boolean, Builtin, Function, Inspectable, Integer, Null, Object, ObjectKind, Return, Str,
-    UserFunction,
+    self, Array, Boolean, Builtin, Function, Inspectable, Integer, Null, Object, ObjectKind,
+    Return, Str, UserFunction,
 };
 use crate::{environment, parser};
 
@@ -215,7 +215,11 @@ impl Evaluable for &Expression {
                 let location = env.location();
                 Ok(Str::new_str_object(kind.value().to_string(), location))
             }
-            ExpressionKind::Array(kind) => unimplemented!(),
+            ExpressionKind::Array(kind) => {
+                let location = env.location();
+                let elements = evaluate_expressions(kind.elements(), env)?;
+                Ok(Array::new_array_obj(elements, location))
+            }
         }
     }
 }
@@ -789,5 +793,23 @@ mod tests {
         ];
 
         test_evaluated_error(tests)
+    }
+
+    #[test]
+    fn can_evaluate_array_literal() -> Result<()> {
+        let source = "[1, 2 * 2, 3 + 3]";
+        let program = program_from_source(source)?;
+        let mut env = Environment::default();
+        let result = program.evaluate(&mut env)?;
+        match result.kind() {
+            ObjectKind::Array(array) => {
+                assert_eq!(3, array.len());
+                test_value(array.at(0)?, Value::Integer(1), "1");
+                test_value(array.at(1)?, Value::Integer(4), "2 * 2");
+                test_value(array.at(2)?, Value::Integer(6), "3 + 3")
+            }
+            other => panic!("expected Array but got {:?}", other),
+        }
+        Ok(())
     }
 }
