@@ -24,10 +24,12 @@ impl BlockStatement {
 
 impl Display for BlockStatement {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut buffer = Vec::new();
-        for stmt in self.statements.iter() {
-            buffer.push(format!("\t{}", stmt));
+        write!(f, "{{\n")?;
+        if !self.statements.is_empty() {
+            for st in self.statements.iter() {
+                write!(f, "\t{}\n", st)?;
+            }
         }
-        write!(f, "{{\n{}\n}}", buffer.join("\n"))
+        write!(f, "}}")
     }
 }

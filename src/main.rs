@@ -1,4 +1,5 @@
 mod ast;
+mod display;
 mod environment;
 mod evaluator;
 mod lexer;

@@ -1,4 +1,5 @@
 use crate::ast::{Identifier, Statement};
+use crate::display::display_parameter_list;
 use crate::environment::Environment;
 use crate::location::Location;
 use crate::object::{Error, Integer, Object, ObjectKind, Result};
@@ -106,13 +107,8 @@ impl UserFunction {
 
 impl Display for UserFunction {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let parameters = self
-            .parameters
-            .iter()
-            .map(|p| format!("{}", p))
-            .collect::<Vec<String>>()
-            .join(", ");
-
-        write!(f, "fn ({}) {}", parameters, self.body)
+        write!(f, "fn ")?;
+        display_parameter_list(&self.parameters, f)?;
+        write!(f, "){}", self.body)
     }
 }

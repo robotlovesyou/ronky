@@ -24,11 +24,12 @@ impl ArrayLiteral {
 
 impl Display for ArrayLiteral {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let elements = self
-            .elements
-            .iter()
-            .map(|e| e.to_string())
-            .collect::<Vec<String>>();
-        write!(f, "[{}]", elements.join(", "))
+        write!(f, "[")?;
+        if !self.elements.is_empty() {
+            for elem in self.elements.iter().take(self.elements.len() - 1) {
+                write!(f, "{}, ", elem)?;
+            }
+        }
+        write!(f, "]")
     }
 }

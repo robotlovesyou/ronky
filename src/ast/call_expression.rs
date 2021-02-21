@@ -1,4 +1,5 @@
 use crate::ast::{Expression, ExpressionKind};
+use crate::display::display_parameter_list;
 use crate::token::Token;
 use std::fmt::{self, Display, Formatter};
 
@@ -37,11 +38,7 @@ impl CallExpression {
 
 impl Display for CallExpression {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let call_arguments = self
-            .arguments()
-            .iter()
-            .map(|a| a.to_string())
-            .collect::<Vec<String>>();
-        write!(f, "{}({})", self.function, call_arguments.join(", "))
+        write!(f, "{}", self.function)?;
+        display_parameter_list(&self.arguments, f)
     }
 }

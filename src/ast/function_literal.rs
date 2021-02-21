@@ -1,4 +1,5 @@
 use crate::ast::{Expression, ExpressionKind, Identifier, Statement};
+use crate::display::display_parameter_list;
 use crate::token::Token;
 use std::fmt::{self, Display, Formatter};
 
@@ -37,13 +38,8 @@ impl FunctionLiteralExpression {
 
 impl Display for FunctionLiteralExpression {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let param_list = self
-            .parameters
-            .iter()
-            .map(|p| p.to_string())
-            .collect::<Vec<String>>()
-            .join(", ");
-
-        write!(f, "{} ({}){}", self.token, param_list, self.body)
+        write!(f, "{}", self.token)?;
+        display_parameter_list(&self.parameters, f)?;
+        write!(f, "{}", self.body)
     }
 }

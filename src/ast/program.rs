@@ -20,11 +20,14 @@ impl Program {
 
 impl Display for Program {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut buffer = Vec::new();
-        for stmt in self.statements.iter() {
-            buffer.push(format!("{}", stmt));
+        if !self.statements.is_empty() {
+            for stmt in self.statements.iter().take(self.statements.len() - 1) {
+                write!(f, "{}\n", stmt)?;
+            }
+            write!(f, "{}", self.statements.last().expect("no last statement"))?;
         }
-        write!(f, "{}", buffer.join("\n"))
+
+        Ok(())
     }
 }
 
