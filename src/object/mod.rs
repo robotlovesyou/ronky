@@ -77,44 +77,20 @@ impl Object {
             _ => Ok(mem::replace(&mut self.kind, ObjectKind::Null(Null))),
         }
     }
-
-    pub fn inspect(&self) -> String {
-        match &self.kind {
-            ObjectKind::Integer(kind) => kind.inspect(),
-            ObjectKind::Boolean(kind) => kind.inspect(),
-            ObjectKind::Null(kind) => kind.inspect(),
-            ObjectKind::Return(kind) => kind.inspect(),
-            ObjectKind::ObjRef(kind) => kind.inspect(),
-            ObjectKind::Function(kind) => kind.inspect(),
-            ObjectKind::Str(kind) => kind.inspect(),
-            ObjectKind::Array(kind) => kind.inspect(),
-        }
-    }
 }
 
 impl Display for Object {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match &self.kind {
-            ObjectKind::Integer(kind) => kind.fmt(f),
-            ObjectKind::Boolean(kind) => kind.fmt(f),
-            ObjectKind::Null(kind) => kind.fmt(f),
-            ObjectKind::Return(kind) => kind.fmt(f),
-            ObjectKind::ObjRef(kind) => std::fmt::Display::fmt(&kind, f),
-            ObjectKind::Function(kind) => std::fmt::Display::fmt(&kind, f),
-            ObjectKind::Str(kind) => std::fmt::Display::fmt(&kind, f),
-            ObjectKind::Array(kind) => std::fmt::Display::fmt(&kind, f),
+            ObjectKind::Integer(kind) => write!(f, "{}", kind),
+            ObjectKind::Boolean(kind) => write!(f, "{}", kind),
+            ObjectKind::Null(kind) => write!(f, "{}", kind),
+            ObjectKind::Return(kind) => write!(f, "{}", kind),
+            ObjectKind::ObjRef(kind) => write!(f, "{}", kind),
+            ObjectKind::Function(kind) => write!(f, "{}", kind),
+            ObjectKind::Str(kind) => write!(f, "{}", kind),
+            ObjectKind::Array(kind) => write!(f, "{}", kind),
         }
-    }
-}
-
-pub trait Inspectable<T: ?Sized>
-where
-    T: Display,
-{
-    fn value(&self) -> &T;
-
-    fn inspect(&self) -> String {
-        format!("{}", self.value())
     }
 }
 

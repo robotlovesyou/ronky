@@ -1,5 +1,6 @@
 use crate::location::Location;
-use crate::object::{Inspectable, Object, ObjectKind};
+use crate::object::{Object, ObjectKind};
+use std::fmt::{self, Display, Formatter};
 
 #[derive(Debug)]
 pub struct Return {
@@ -22,8 +23,8 @@ impl Return {
     }
 }
 
-impl Inspectable<Object> for Return {
-    fn value(&self) -> &Object {
-        &self.value
+impl Display for Return {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "RETURN")
     }
 }

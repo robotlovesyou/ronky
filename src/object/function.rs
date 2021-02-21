@@ -1,7 +1,7 @@
 use crate::ast::{Identifier, Statement};
 use crate::environment::Environment;
 use crate::location::Location;
-use crate::object::{Error, Inspectable, Integer, Object, ObjectKind, Result};
+use crate::object::{Error, Integer, Object, ObjectKind, Result};
 use std::fmt::{self, Display, Formatter};
 
 #[derive(Debug)]
@@ -16,16 +16,6 @@ impl Display for Function {
             Function::User(kind) => std::fmt::Display::fmt(&kind, f),
             Function::Builtin(kind) => std::fmt::Display::fmt(&kind, f),
         }
-    }
-}
-
-impl Inspectable<Function> for Function {
-    fn value(&self) -> &Function {
-        &self
-    }
-
-    fn inspect(&self) -> String {
-        format!("{}", self)
     }
 }
 

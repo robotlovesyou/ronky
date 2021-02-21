@@ -1,5 +1,6 @@
 use crate::location::Location;
-use crate::object::{Inspectable, Object, ObjectKind};
+use crate::object::{Object, ObjectKind};
+use std::fmt::{self, Display, Formatter};
 
 const TRUE: bool = true;
 const FALSE: bool = false;
@@ -18,13 +19,14 @@ impl Boolean {
         };
         Object::new(ObjectKind::Boolean(kind), location)
     }
+
+    pub fn value(&self) -> bool {
+        matches!(self, Boolean::True)
+    }
 }
 
-impl Inspectable<bool> for Boolean {
-    fn value(&self) -> &bool {
-        match self {
-            Boolean::True => &TRUE,
-            Boolean::False => &FALSE,
-        }
+impl Display for Boolean {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.value())
     }
 }

@@ -1,5 +1,5 @@
 use crate::location::Location;
-use crate::object::{Error, Inspectable, ObjRef, Object, ObjectKind, Result};
+use crate::object::{Error, ObjRef, Object, ObjectKind, Result};
 use std::fmt::{self, Display, Formatter};
 use std::rc::Rc;
 
@@ -50,15 +50,5 @@ impl Display for Array {
             let last_ref = ObjRef::new_obj_ref(last.clone(), last.location());
             write!(f, "{}]", last_ref)
         }
-    }
-}
-
-impl Inspectable<Array> for Array {
-    fn value(&self) -> &Array {
-        &self
-    }
-
-    fn inspect(&self) -> String {
-        format!("{}", self)
     }
 }

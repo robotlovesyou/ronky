@@ -1,5 +1,5 @@
 use crate::location::Location;
-use crate::object::{Inspectable, Object, ObjectKind};
+use crate::object::{Object, ObjectKind};
 
 use std::fmt::{self, Display, Formatter};
 use std::rc::Rc;
@@ -17,16 +17,6 @@ impl ObjRef {
 
 impl Display for ObjRef {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.ptr.inspect())
-    }
-}
-
-impl Inspectable<Object> for ObjRef {
-    fn value(&self) -> &Object {
-        &self.ptr
-    }
-
-    fn inspect(&self) -> String {
-        self.ptr.inspect()
+        write!(f, "{}", self.ptr)
     }
 }

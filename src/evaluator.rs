@@ -6,8 +6,8 @@ use crate::ast::{
 use crate::environment::Environment;
 use crate::location::Location;
 use crate::object::{
-    self, Array, Boolean, Builtin, Function, Inspectable, Integer, Null, Object, ObjectKind,
-    Return, Str, UserFunction,
+    self, Array, Boolean, Builtin, Function, Integer, Null, Object, ObjectKind, Return, Str,
+    UserFunction,
 };
 use crate::{environment, parser};
 
@@ -319,11 +319,9 @@ fn evaluate_prefix_expression(
 fn evaluate_prefix_not_expression(value: &Object, location: Location) -> Result<Object> {
     match value.kind() {
         ObjectKind::Integer(integer) => {
-            Ok(Boolean::new_boolean_object(*integer.value() == 0, location))
+            Ok(Boolean::new_boolean_object(integer.value() == 0, location))
         }
-        ObjectKind::Boolean(boolean) => {
-            Ok(Boolean::new_boolean_object(!(*boolean.value()), location))
-        }
+        ObjectKind::Boolean(boolean) => Ok(Boolean::new_boolean_object(!boolean.value(), location)),
         ObjectKind::Null(_) => Ok(Boolean::new_boolean_object(false, location)),
         _ => Err(EvaluationError::new_evaluation_error(format!(
             "unknown operator: {} {} at {}",
@@ -336,9 +334,7 @@ fn evaluate_prefix_not_expression(value: &Object, location: Location) -> Result<
 
 fn evaluate_prefix_neg_expression(value: &Object, location: Location) -> Result<Object> {
     match value.kind() {
-        ObjectKind::Integer(integer) => {
-            Ok(Integer::new_integer_object(-(*integer.value()), location))
-        }
+        ObjectKind::Integer(integer) => Ok(Integer::new_integer_object(-integer.value(), location)),
         _ => Err(EvaluationError::new_evaluation_error(format!(
             "unknown operator: {} {} at {}",
             PrefixOperator::Minus,
@@ -461,8 +457,8 @@ fn evaluate_if_expression(expression: &IfExpression, env: &mut Environment) -> R
 
 fn is_truthy(object: &Object, location: Location) -> Result<bool> {
     match object.kind() {
-        ObjectKind::Integer(kind) => Ok(*kind.value() != 0),
-        ObjectKind::Boolean(kind) => Ok(*kind.value()),
+        ObjectKind::Integer(kind) => Ok(kind.value() != 0),
+        ObjectKind::Boolean(kind) => Ok(kind.value()),
         ObjectKind::Null(_) => Ok(false),
         _ => Err(EvaluationError::new_evaluation_error(format!(
             "type mismatch; {} cannot be evaluated for truthiness at {}",
@@ -505,10 +501,10 @@ mod tests {
     fn test_value(object: Object, expected_value: Value, source: &str) {
         match (object.kind(), expected_value) {
             (ObjectKind::Integer(integer), Value::Integer(expected)) => {
-                assert_eq!(&expected, integer.value(), "{}", source)
+                assert_eq!(expected, integer.value(), "{}", source)
             }
             (ObjectKind::Boolean(boolean), Value::Boolean(expected)) => {
-                assert_eq!(&expected, boolean.value(), "{}", source)
+                assert_eq!(expected, boolean.value(), "{}", source)
             }
             (ObjectKind::Str(value), Value::Str(expected)) => {
                 assert_eq!(expected, value.value())

@@ -1,5 +1,5 @@
 use crate::location::Location;
-use crate::object::{Inspectable, Object, ObjectKind};
+use crate::object::{Object, ObjectKind};
 use std::fmt::{self, Display, Formatter};
 
 const NULL: NullValue = NullValue;
@@ -22,8 +22,8 @@ impl Null {
     }
 }
 
-impl Inspectable<NullValue> for Null {
-    fn value(&self) -> &NullValue {
-        &NULL
+impl Display for Null {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "NULL")
     }
 }
