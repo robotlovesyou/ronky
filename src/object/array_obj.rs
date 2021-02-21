@@ -1,7 +1,6 @@
 use crate::location::Location;
 use crate::object::{Error, Inspectable, ObjRef, Object, ObjectKind, Result};
 use std::fmt::{self, Display, Formatter};
-use std::ops::{Index, IndexMut};
 use std::rc::Rc;
 
 #[derive(Debug)]

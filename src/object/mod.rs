@@ -99,7 +99,7 @@ impl Display for Object {
             ObjectKind::Boolean(kind) => kind.fmt(f),
             ObjectKind::Null(kind) => kind.fmt(f),
             ObjectKind::Return(kind) => kind.fmt(f),
-            ObjectKind::ObjRef(kind) => kind.fmt(f),
+            ObjectKind::ObjRef(kind) => std::fmt::Display::fmt(&kind, f),
             ObjectKind::Function(kind) => std::fmt::Display::fmt(&kind, f),
             ObjectKind::Str(kind) => std::fmt::Display::fmt(&kind, f),
             ObjectKind::Array(kind) => std::fmt::Display::fmt(&kind, f),
