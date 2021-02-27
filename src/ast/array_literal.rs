@@ -9,7 +9,7 @@ pub struct ArrayLiteral {
 }
 
 impl ArrayLiteral {
-    pub fn new(token: Token, elements: Vec<Expression>) -> Expression {
+    pub fn new_array_literal(token: Token, elements: Vec<Expression>) -> Expression {
         Expression::new(ExpressionKind::Array(ArrayLiteral { token, elements }))
     }
 

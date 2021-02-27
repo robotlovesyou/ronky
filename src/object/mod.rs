@@ -1,8 +1,5 @@
 use std::fmt::{self, Debug, Display, Formatter};
-use std::rc::Rc;
 
-use crate::ast::{Identifier, Statement};
-use crate::environment::Environment;
 use crate::location::Location;
 use std::mem;
 
@@ -23,8 +20,6 @@ mod null;
 mod obj_ref;
 mod return_obj;
 mod str_obj;
-
-const LEN_FN_STR: &str = "len(arg){}";
 
 #[derive(Debug)]
 pub struct Error {

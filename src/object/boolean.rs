@@ -2,9 +2,6 @@ use crate::location::Location;
 use crate::object::{Object, ObjectKind};
 use std::fmt::{self, Display, Formatter};
 
-const TRUE: bool = true;
-const FALSE: bool = false;
-
 #[derive(Debug)]
 pub enum Boolean {
     True,

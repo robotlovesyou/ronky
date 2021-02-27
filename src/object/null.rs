@@ -2,8 +2,6 @@ use crate::location::Location;
 use crate::object::{Object, ObjectKind};
 use std::fmt::{self, Display, Formatter};
 
-const NULL: NullValue = NullValue;
-
 #[derive(Debug)]
 pub struct NullValue;
 

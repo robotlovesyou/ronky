@@ -188,15 +188,15 @@ impl Parser {
         };
 
         parser.register_prefix_fn(Tag::Ident, |parser: &mut Parser, token: Token| {
-            parser.parse_identifier_expression(token)
+            Ok(parser.parse_identifier_expression(token))
         });
 
         parser.register_prefix_fn(Tag::Int, |parser: &mut Parser, token: Token| {
-            parser.parse_integer_literal_expression(token)
+            Ok(parser.parse_integer_literal_expression(token))
         });
 
         parser.register_prefix_fn(Tag::Str, |parser: &mut Parser, token: Token| {
-            parser.parse_string(token)
+            Ok(parser.parse_string(token))
         });
 
         parser.register_prefix_fn(Tag::Minus, |parser: &mut Parser, token: Token| {
@@ -208,11 +208,11 @@ impl Parser {
         });
 
         parser.register_prefix_fn(Tag::True, |parser: &mut Parser, token: Token| {
-            parser.parse_boolean_literal_expression(token)
+            Ok(parser.parse_boolean_literal_expression(token))
         });
 
         parser.register_prefix_fn(Tag::False, |parser: &mut Parser, token: Token| {
-            parser.parse_boolean_literal_expression(token)
+            Ok(parser.parse_boolean_literal_expression(token))
         });
 
         parser.register_prefix_fn(Tag::LParen, |parser: &mut Parser, token: Token| {
@@ -389,13 +389,11 @@ impl Parser {
         Ok(left)
     }
 
-    fn parse_identifier_expression(&mut self, token: Token) -> Result<Expression> {
-        Ok(IdentifierExpression::new_identifier_expression(
-            Identifier::new(token),
-        ))
+    fn parse_identifier_expression(&mut self, token: Token) -> Expression {
+        IdentifierExpression::new_identifier_expression(Identifier::new(token))
     }
 
-    fn parse_integer_literal_expression(&mut self, token: Token) -> Result<Expression> {
+    fn parse_integer_literal_expression(&mut self, token: Token) -> Expression {
         let value = match &token.kind {
             // Anything which does not parse as an i64 here would indicate a bug in the
             // lexer so ok to expect
@@ -403,13 +401,11 @@ impl Parser {
             other => panic!("got {:?} expecting an Int", other),
         };
 
-        Ok(IntegerLiteralExpression::new_integer_literal_expression(
-            token, value,
-        ))
+        IntegerLiteralExpression::new_integer_literal_expression(token, value)
     }
 
-    fn parse_boolean_literal_expression(&mut self, token: Token) -> Result<Expression> {
-        Ok(BooleanExpression::new_boolean_expression(token))
+    fn parse_boolean_literal_expression(&mut self, token: Token) -> Expression {
+        BooleanExpression::new_boolean_expression(token)
     }
 
     fn parse_prefix_expression(&mut self, token: Token) -> Result<Expression> {
@@ -554,13 +550,13 @@ impl Parser {
         Ok(arguments)
     }
 
-    fn parse_string(&mut self, token: Token) -> Result<Expression> {
-        Ok(StrExpression::new_str_expression(token))
+    fn parse_string(&mut self, token: Token) -> Expression {
+        StrExpression::new_str_expression(token)
     }
 
     fn parse_array_literal(&mut self, token: Token) -> Result<Expression> {
         let elements = self.parse_expression_list(Tag::RBracket)?;
-        Ok(ArrayLiteral::new(token, elements))
+        Ok(ArrayLiteral::new_array_literal(token, elements))
     }
 
     fn parse_index_expression(&mut self, left: Expression, token: Token) -> Result<Expression> {

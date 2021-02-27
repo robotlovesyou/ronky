@@ -22,7 +22,7 @@ impl Display for Program {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if !self.statements.is_empty() {
             for stmt in self.statements.iter().take(self.statements.len() - 1) {
-                write!(f, "{}\n", stmt)?;
+                writeln!(f, "{}", stmt)?;
             }
             write!(f, "{}", self.statements.last().expect("no last statement"))?;
         }

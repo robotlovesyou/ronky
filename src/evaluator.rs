@@ -11,7 +11,6 @@ use crate::object::{
 };
 use crate::{environment, parser};
 
-use std::collections::HashMap;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::result;
 
@@ -167,12 +166,14 @@ impl Evaluable for &Expression {
     fn evaluate(&self, env: &mut Environment) -> Result<Object> {
         env.set_location(self.location());
         match self.kind() {
-            ExpressionKind::Boolean(kind) => evaluate_bool_literal_expresson(kind, env.location()),
+            ExpressionKind::Boolean(kind) => {
+                Ok(evaluate_bool_literal_expresson(kind, env.location()))
+            }
 
             ExpressionKind::Identifier(kind) => evaluate_identifier(kind, env),
 
             ExpressionKind::IntegerLiteral(kind) => {
-                evaluate_integer_literal_expression(kind, env.location())
+                Ok(evaluate_integer_literal_expression(kind, env.location()))
             }
 
             ExpressionKind::Prefix(kind) => {
@@ -191,11 +192,7 @@ impl Evaluable for &Expression {
             ExpressionKind::If(kind) => evaluate_if_expression(kind, env),
 
             ExpressionKind::FunctionLiteral(kind) => {
-                let parameters = kind
-                    .parameters()
-                    .iter()
-                    .cloned()
-                    .collect::<Vec<Identifier>>();
+                let parameters = kind.parameters().to_vec();
                 let body = kind.body().clone();
                 Ok(UserFunction::new_user_function_object(
                     parameters,
@@ -305,15 +302,12 @@ fn extend_function_env(
 fn evaluate_integer_literal_expression(
     expression: &IntegerLiteralExpression,
     location: Location,
-) -> Result<Object> {
-    Ok(Integer::new_integer_object(expression.value(), location))
+) -> Object {
+    Integer::new_integer_object(expression.value(), location)
 }
 
-fn evaluate_bool_literal_expresson(
-    expression: &BooleanExpression,
-    location: Location,
-) -> Result<Object> {
-    Ok(Boolean::new_boolean_object(expression.value(), location))
+fn evaluate_bool_literal_expresson(expression: &BooleanExpression, location: Location) -> Object {
+    Boolean::new_boolean_object(expression.value(), location)
 }
 
 fn evaluate_prefix_expression(
@@ -363,7 +357,7 @@ fn evaluate_infix_expression(
 ) -> Result<Object> {
     match (left.kind(), right.kind()) {
         (ObjectKind::Integer(a), ObjectKind::Integer(b)) => {
-            evaluate_integer_infix_expression(operator, a, b, location)
+            Ok(evaluate_integer_infix_expression(operator, a, b, location))
         }
         (ObjectKind::Boolean(a), ObjectKind::Boolean(b)) => {
             evaluate_boolean_infix_expression(operator, a, b, location)
@@ -386,8 +380,8 @@ fn evaluate_integer_infix_expression(
     left: &Integer,
     right: &Integer,
     location: Location,
-) -> Result<Object> {
-    Ok(match operator {
+) -> Object {
+    match operator {
         InfixOperator::Add => Integer::new_integer_object(left.value() + right.value(), location),
         InfixOperator::Subtract => {
             Integer::new_integer_object(left.value() - right.value(), location)
@@ -410,7 +404,7 @@ fn evaluate_integer_infix_expression(
         InfixOperator::NotEquals => {
             Boolean::new_boolean_object(left.value() != right.value(), location)
         }
-    })
+    }
 }
 
 fn evaluate_boolean_infix_expression(
@@ -457,12 +451,10 @@ fn evaluate_if_expression(expression: &IfExpression, env: &mut Environment) -> R
     let condition = expression.condition().evaluate(env)?;
     if is_truthy(&condition, expression.condition().location())? {
         expression.consequence().evaluate(env)
+    } else if let Some(alternative) = expression.alternative() {
+        alternative.evaluate(env)
     } else {
-        if let Some(alternative) = expression.alternative() {
-            alternative.evaluate(env)
-        } else {
-            Ok(Null::new_null_object(env.location()))
-        }
+        Ok(Null::new_null_object(env.location()))
     }
 }
 
@@ -481,12 +473,10 @@ fn is_truthy(object: &Object, location: Location) -> Result<bool> {
 
 fn evaluate_index_expression(left: &Object, index: &Object, location: Location) -> Result<Object> {
     match (left.kind(), index.kind()) {
-        (ObjectKind::Array(array), ObjectKind::Integer(index)) => {
-            match array.at(index.value() as usize) {
-                Ok(val) => Ok(val),
-                Err(val) => Ok(Null::new_null_object(location)),
-            }
-        }
+        (ObjectKind::Array(array), ObjectKind::Integer(index)) => match array.at(index.value()) {
+            Ok(val) => Ok(val),
+            Err(_) => Ok(Null::new_null_object(location)),
+        },
         (ObjectKind::Array(_), other) => Err(EvaluationError::new_evaluation_error(format!(
             "cannot index an array with an {}",
             other.name()
@@ -500,7 +490,6 @@ fn evaluate_index_expression(left: &Object, index: &Object, location: Location) 
 
 #[cfg(test)]
 mod tests {
-    // TODO: Add in missing function call tests from other expression tests (see go source)
     use super::*;
     use crate::lexer::IntoTokens;
     use crate::parser::Parser;
@@ -542,7 +531,7 @@ mod tests {
             }
             (ObjectKind::Array(array), Value::Array(expected)) => {
                 for (i, e) in expected.iter().enumerate() {
-                    let element = array.at(i).unwrap();
+                    let element = array.at(i as i64).unwrap();
                     assert!(matches!(element.kind(), ObjectKind::Integer(_)));
                     test_value(element, Value::Integer(*e), source);
                 }

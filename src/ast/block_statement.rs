@@ -24,10 +24,10 @@ impl BlockStatement {
 
 impl Display for BlockStatement {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{{\n")?;
+        writeln!(f, "{{")?;
         if !self.statements.is_empty() {
             for st in self.statements.iter() {
-                write!(f, "\t{}\n", st)?;
+                writeln!(f, "\t{}", st)?;
             }
         }
         write!(f, "}}")

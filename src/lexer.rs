@@ -31,7 +31,7 @@ impl Lexer {
         }
     }
 
-    fn read_identifier(&mut self, first: &SourceChar) -> Option<Token> {
+    fn read_identifier(&mut self, first: &SourceChar) -> Token {
         let mut ident: String = format!("{}", first.repr);
         while let Some(sc) = self.source.peek() {
             match sc.repr {
@@ -45,7 +45,7 @@ impl Lexer {
         new_token(first, token::keyword_to_kind(&ident))
     }
 
-    fn read_number(&mut self, first: &SourceChar) -> Option<Token> {
+    fn read_number(&mut self, first: &SourceChar) -> Token {
         let mut number: String = format!("{}", first.repr);
         while let Some(sc) = self.source.peek() {
             match sc.repr {
@@ -59,7 +59,7 @@ impl Lexer {
         new_token(first, Kind::Int(number))
     }
 
-    fn read_string(&mut self, first: &SourceChar) -> Option<Token> {
+    fn read_string(&mut self, first: &SourceChar) -> Token {
         let mut value = String::new();
         while let Some(sc) = self.source.next() {
             if sc.repr == '"' {
@@ -71,8 +71,8 @@ impl Lexer {
     }
 }
 
-fn new_token(sc: &SourceChar, kind: Kind) -> Option<Token> {
-    Some(Token::new(sc.location, kind))
+fn new_token(sc: &SourceChar, kind: Kind) -> Token {
+    Token::new(sc.location, kind)
 }
 
 fn is_letter(c: char) -> bool {
@@ -92,32 +92,32 @@ impl Iterator for Lexer {
                 ' ' | '\t' => None,
                 '=' => self.if_peek_else(
                     '=',
-                    || new_token(&sc, Kind::EQ),
-                    || new_token(&sc, Kind::Assign),
+                    || Some(new_token(&sc, Kind::EQ)),
+                    || Some(new_token(&sc, Kind::Assign)),
                 ),
-                '+' => new_token(&sc, Kind::Plus),
-                '-' => new_token(&sc, Kind::Minus),
+                '+' => Some(new_token(&sc, Kind::Plus)),
+                '-' => Some(new_token(&sc, Kind::Minus)),
                 '!' => self.if_peek_else(
                     '=',
-                    || new_token(&sc, Kind::NotEQ),
-                    || new_token(&sc, Kind::Bang),
+                    || Some(new_token(&sc, Kind::NotEQ)),
+                    || Some(new_token(&sc, Kind::Bang)),
                 ),
-                '/' => new_token(&sc, Kind::Slash),
-                '*' => new_token(&sc, Kind::Asterisk),
-                '<' => new_token(&sc, Kind::LT),
-                '>' => new_token(&sc, Kind::GT),
-                ';' => new_token(&sc, Kind::Semicolon),
-                ',' => new_token(&sc, Kind::Comma),
-                '{' => new_token(&sc, Kind::LBrace),
-                '}' => new_token(&sc, Kind::RBrace),
-                '(' => new_token(&sc, Kind::LParen),
-                ')' => new_token(&sc, Kind::RParen),
-                '[' => new_token(&sc, Kind::LBracket),
-                ']' => new_token(&sc, Kind::RBracket),
-                '"' => self.read_string(&sc),
-                c if is_letter(c) => self.read_identifier(&sc),
-                c if is_digit(c) => self.read_number(&sc),
-                illegal => new_token(&sc, Illegal(illegal)),
+                '/' => Some(new_token(&sc, Kind::Slash)),
+                '*' => Some(new_token(&sc, Kind::Asterisk)),
+                '<' => Some(new_token(&sc, Kind::LT)),
+                '>' => Some(new_token(&sc, Kind::GT)),
+                ';' => Some(new_token(&sc, Kind::Semicolon)),
+                ',' => Some(new_token(&sc, Kind::Comma)),
+                '{' => Some(new_token(&sc, Kind::LBrace)),
+                '}' => Some(new_token(&sc, Kind::RBrace)),
+                '(' => Some(new_token(&sc, Kind::LParen)),
+                ')' => Some(new_token(&sc, Kind::RParen)),
+                '[' => Some(new_token(&sc, Kind::LBracket)),
+                ']' => Some(new_token(&sc, Kind::RBracket)),
+                '"' => Some(self.read_string(&sc)),
+                c if is_letter(c) => Some(self.read_identifier(&sc)),
+                c if is_digit(c) => Some(self.read_number(&sc)),
+                illegal => Some(new_token(&sc, Illegal(illegal))),
             };
             if next.is_some() {
                 return next;
