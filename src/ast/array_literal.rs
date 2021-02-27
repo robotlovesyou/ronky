@@ -29,6 +29,7 @@ impl Display for ArrayLiteral {
             for elem in self.elements.iter().take(self.elements.len() - 1) {
                 write!(f, "{}, ", elem)?;
             }
+            write!(f, "{}", self.elements.last().expect("no final element"))?;
         }
         write!(f, "]")
     }

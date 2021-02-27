@@ -220,6 +220,7 @@ impl Evaluable for &Expression {
                 let elements = evaluate_expressions(kind.elements(), env)?;
                 Ok(Array::new_array_obj(elements, location))
             }
+            ExpressionKind::Index(_) => unimplemented!(),
         }
     }
 }
@@ -807,5 +808,29 @@ mod tests {
             other => panic!("expected Array but got {:?}", other),
         }
         Ok(())
+    }
+
+    #[test]
+    #[ignore]
+    fn can_evaluate_array_index_expression() -> Result<()> {
+        let tests = vec![
+            ("[1, 2, 3][0]", Value::Integer(1)),
+            ("[1, 2, 3][1]", Value::Integer(2)),
+            ("[1, 2, 3][2]", Value::Integer(3)),
+            ("let i = 0; [1][i];", Value::Integer(1)),
+            ("[1, 2, 3][1 + 1];", Value::Integer(3)),
+            ("let myArray = [1, 2, 3]; myArray[2];", Value::Integer(3)),
+            (
+                "let myArray = [1, 2, 3]; myArray[0] + myArray[1] + myArray[2];",
+                Value::Integer(6),
+            ),
+            (
+                "let myArray = [1, 2, 3]; let i = myArray[0]; myArray[i]",
+                Value::Integer(2),
+            ),
+            ("[1, 2, 3][3]", Value::Null),
+            ("[1, 2, 3][-1]", Value::Null),
+        ];
+        test_evaluated_value(tests)
     }
 }

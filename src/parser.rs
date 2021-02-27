@@ -6,7 +6,6 @@ use std::fmt::{self, Debug, Display, Formatter};
 use std::iter::Peekable;
 use std::rc::Rc;
 use std::result;
-
 const PARSING_A_LET_STATEMENT: &str = "parsing a let statement";
 const PARSING_A_PREFIX_EXPRESSION: &str = "parsing a prefix expression";
 const PARSING_AN_INFIX_EXPRESSION: &str = "parsing a infix expression";
@@ -15,6 +14,7 @@ const PARSING_AN_IF_EXPRESSION: &str = "parsing an if expression";
 const PARSING_A_PARAMETER_LIST: &str = "parsing a parameter list";
 const PARSING_A_FUNCTION_LITERAL: &str = "parsing a function literal";
 const PARSING_A_RETURN_STATEMENT: &str = "parsing a return statement";
+const PARSING_AN_INDEX_EXPRESSION: &str = "parsing an index expression";
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
 enum Precedence {
@@ -25,6 +25,7 @@ enum Precedence {
     Product,
     Prefix,
     Call,
+    Index,
 }
 
 trait ErrorMessage {
@@ -173,6 +174,7 @@ fn operator_precedence(token: &Token) -> Precedence {
         EQ => Equals,
         NotEQ => Equals,
         LParen => Call,
+        LBracket => Index,
         _ => Lowest,
     }
 }
@@ -289,6 +291,13 @@ impl Parser {
             Tag::LParen,
             |parser: &mut Parser, left: Expression, token: Token| {
                 parser.parse_call_expression(left, token)
+            },
+        );
+
+        parser.register_infix_fn(
+            Tag::LBracket,
+            |parser: &mut Parser, left: Expression, token: Token| {
+                parser.parse_index_expression(left, token)
             },
         );
 
@@ -552,6 +561,15 @@ impl Parser {
     fn parse_array_literal(&mut self, token: Token) -> Result<Expression> {
         let elements = self.parse_expression_list(Tag::RBracket)?;
         Ok(ArrayLiteral::new(token, elements))
+    }
+
+    fn parse_index_expression(&mut self, left: Expression, token: Token) -> Result<Expression> {
+        let next_token = self.expect_next(PARSING_AN_INDEX_EXPRESSION)?;
+        let index = self.parse_expression(next_token, Precedence::Lowest)?;
+        self.expect_peek_consume(Tag::RBracket, PARSING_AN_INDEX_EXPRESSION)?;
+        Ok(crate::ast::IndexExpression::new_index_expression(
+            token, left, index,
+        ))
     }
 
     fn consume_source_line(&mut self) {
@@ -880,6 +898,14 @@ mod tests {
             (
                 "add(a + b + c * d / f + g)",
                 "add((((a + b) + ((c * d) / f)) + g))",
+            ),
+            (
+                "a * [1, 2, 3, 4][b * c] * d",
+                "((a * ([1, 2, 3, 4][(b * c)])) * d)",
+            ),
+            (
+                "add(a * b[2], b[1], 2 * [1, 2][1])",
+                "add((a * (b[2])), (b[1]), (2 * ([1, 2][1])))",
             ),
         ];
 
@@ -1240,6 +1266,30 @@ mod tests {
                     );
                 }
                 other => panic!("got {:?} expecting an array_literal", other),
+            },
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn can_parse_index_expression() -> Result<()> {
+        let source = "myArray[1+1]";
+        let mut parser = parser_from_source(source);
+        let program = parser.parse()?;
+        assert_eq!(1, program.statements().len());
+        test_statement_as_expression_statement(
+            program.statements().first().unwrap(),
+            |ex| match ex.kind() {
+                ExpressionKind::Index(kind) => {
+                    test_literal_expression(kind.left(), Operand::Identifier("myArray"));
+                    test_infix_expression(
+                        kind.index(),
+                        Operand::Integer(1),
+                        Operand::Integer(1),
+                        InfixOperator::Add,
+                    )
+                }
+                other => panic!("got {:?} expecting an index expression", other),
             },
         );
         Ok(())

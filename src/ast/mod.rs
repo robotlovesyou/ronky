@@ -10,6 +10,7 @@ pub use expression_statement::*;
 pub use function_literal::*;
 pub use identifier_expression::*;
 pub use if_expression::*;
+pub use index_expression::*;
 pub use infix_expression::*;
 pub use integer_literal::*;
 pub use let_statement::*;
@@ -27,6 +28,7 @@ mod expression_statement;
 mod function_literal;
 mod identifier_expression;
 mod if_expression;
+mod index_expression;
 mod infix_expression;
 mod integer_literal;
 mod let_statement;
@@ -156,6 +158,7 @@ pub enum ExpressionKind {
     Call(CallExpression),
     Str(StrExpression),
     Array(ArrayLiteral),
+    Index(IndexExpression),
 }
 
 impl ExpressionKind {
@@ -172,6 +175,7 @@ impl ExpressionKind {
             Call(kind) => kind.token(),
             Str(kind) => kind.token(),
             Array(kind) => kind.token(),
+            Index(kind) => kind.token(),
         }
     }
 }
@@ -190,6 +194,7 @@ impl Display for ExpressionKind {
             Call(kind) => kind.fmt(f),
             Str(kind) => kind.fmt(f),
             Array(kind) => kind.fmt(f),
+            Index(kind) => kind.fmt(f),
         }
     }
 }
