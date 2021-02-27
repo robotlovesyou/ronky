@@ -1,5 +1,5 @@
 use crate::location::Location;
-use crate::object::{Error, ObjRef, Object, ObjectKind, Result};
+use crate::object::{Error, Null, ObjRef, Object, ObjectKind, Result};
 use std::fmt::{self, Display, Formatter};
 use std::rc::Rc;
 
@@ -33,6 +33,31 @@ impl Array {
         } else {
             Err(Error::new(format!("index {} is out of range", idx)))
         }
+    }
+
+    pub fn tail(&self, location: Location) -> Object {
+        if self.elements.len() > 1 {
+            let ref_elements: Vec<Rc<Object>> = self.elements[1..].iter().cloned().collect();
+            Object::new(
+                ObjectKind::Array(Array {
+                    elements: ref_elements,
+                }),
+                location,
+            )
+        } else {
+            Null::new_null_object(location)
+        }
+    }
+
+    pub fn push(&self, item: Object, location: Location) -> Object {
+        let mut ref_elements: Vec<Rc<Object>> = self.elements.iter().cloned().collect();
+        ref_elements.push(Rc::new(item));
+        Object::new(
+            ObjectKind::Array(Array {
+                elements: ref_elements,
+            }),
+            location,
+        )
     }
 }
 

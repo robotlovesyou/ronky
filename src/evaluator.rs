@@ -236,7 +236,12 @@ fn evaluate_identifier(identifier: &IdentifierExpression, env: &mut Environment)
         Ok(result?)
     } else {
         match identifier.name() {
+            // TODO: This can be dried out by returning a result from the new_f functions and by passing the builtin enum to a single constructor
             "len" => Ok(Builtin::new_len(env.location())),
+            "first" => Ok(Builtin::new_first(env.location())),
+            "last" => Ok(Builtin::new_last(env.location())),
+            "rest" => Ok(Builtin::new_rest(env.location())),
+            "push" => Ok(Builtin::new_push(env.location())),
             // good to unwrap here as Ok variant is discounted above
             _ => Err(Error::from(result.err().unwrap())),
         }
@@ -509,6 +514,7 @@ mod tests {
         Boolean(bool),
         Null,
         Str(&'static str),
+        Array(&'static [i64]),
     }
 
     impl From<parser::Error> for Error {
@@ -533,6 +539,13 @@ mod tests {
             }
             (ObjectKind::Str(value), Value::Str(expected)) => {
                 assert_eq!(expected, value.value())
+            }
+            (ObjectKind::Array(array), Value::Array(expected)) => {
+                for (i, e) in expected.iter().enumerate() {
+                    let element = array.at(i).unwrap();
+                    assert!(matches!(element.kind(), ObjectKind::Integer(_)));
+                    test_value(element, Value::Integer(*e), source);
+                }
             }
             (ObjectKind::Null(_), Value::Null) => {} // do nothing, these are always equal
             other => panic!("{:?} is not a valid option with source {}", other, source),
@@ -795,6 +808,15 @@ mod tests {
             ("len(\"\")", Value::Integer(0)),
             ("len(\"four\")", Value::Integer(4)),
             ("len(\"hello world\")", Value::Integer(11)),
+            ("len([1, 2, 3])", Value::Integer(3)),
+            ("len([])", Value::Integer(0)),
+            ("first([1, 2, 3])", Value::Integer(1)),
+            ("first([])", Value::Null),
+            ("last([1, 2, 3])", Value::Integer(3)),
+            ("last([])", Value::Null),
+            ("rest([1, 2, 3])", Value::Array(&[2, 3])),
+            ("rest([])", Value::Null),
+            ("push([], 1)", Value::Array(&[1])),
         ];
 
         test_evaluated_value(tests)
@@ -810,6 +832,22 @@ mod tests {
             (
                 "len(\"one\", \"two\")",
                 "Error: wrong number of arguments. got 2, want 1 at line: 1 column: 4",
+            ),
+            (
+                "first(1)",
+                "Error: argument to `first` must be Array, got Integer at line: 1 column: 6",
+            ),
+            (
+                "last(1)",
+                "Error: argument to `last` must be Array, got Integer at line: 1 column: 5",
+            ),
+            (
+                "rest(1)",
+                "Error: argument to `rest` must be Array, got Integer at line: 1 column: 5",
+            ),
+            (
+                "push(1, 1)",
+                "Error: first argument to `push` must be Array, got Integer at line: 1 column: 5",
             ),
         ];
 
