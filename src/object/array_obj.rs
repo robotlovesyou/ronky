@@ -25,7 +25,7 @@ impl Array {
     }
 
     pub fn at(&self, idx: usize) -> Result<Object> {
-        if idx <= self.elements.len() {
+        if idx < self.elements.len() && idx >= 0 {
             Ok(ObjRef::new_obj_ref(
                 self.elements[idx].clone(),
                 self.elements[idx].location(),

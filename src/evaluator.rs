@@ -220,7 +220,12 @@ impl Evaluable for &Expression {
                 let elements = evaluate_expressions(kind.elements(), env)?;
                 Ok(Array::new_array_obj(elements, location))
             }
-            ExpressionKind::Index(_) => unimplemented!(),
+            ExpressionKind::Index(kind) => {
+                let location = env.location();
+                let left = kind.left().evaluate(env)?;
+                let index = kind.index().evaluate(env)?;
+                evaluate_index_expression(&left, &index, location)
+            }
         }
     }
 }
@@ -465,6 +470,25 @@ fn is_truthy(object: &Object, location: Location) -> Result<bool> {
             "type mismatch; {} cannot be evaluated for truthiness at {}",
             object.kind().name(),
             location
+        ))),
+    }
+}
+
+fn evaluate_index_expression(left: &Object, index: &Object, location: Location) -> Result<Object> {
+    match (left.kind(), index.kind()) {
+        (ObjectKind::Array(array), ObjectKind::Integer(index)) => {
+            match array.at(index.value() as usize) {
+                Ok(val) => Ok(val),
+                Err(val) => Ok(Null::new_null_object(location)),
+            }
+        }
+        (ObjectKind::Array(_), other) => Err(EvaluationError::new_evaluation_error(format!(
+            "cannot index an array with an {}",
+            other.name()
+        ))),
+        (other, _) => Err(EvaluationError::new_evaluation_error(format!(
+            "cannot index into a {}",
+            other.name()
         ))),
     }
 }
@@ -811,7 +835,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn can_evaluate_array_index_expression() -> Result<()> {
         let tests = vec![
             ("[1, 2, 3][0]", Value::Integer(1)),
